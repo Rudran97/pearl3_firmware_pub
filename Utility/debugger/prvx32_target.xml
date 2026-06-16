@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2018-2019 Free Software Foundation, Inc.
+
+     Copying and distribution of this file, with or without modification,
+     are permitted in any medium without royalty provided the copyright
+     notice and this notice are preserved.
+
+     Modified version from https://gitlab.com/qemu-project/qemu/-/blob/b69801dd6b1eb4d107f7c2f643adf0a4e3ec9124/gdb-xml/riscv-32bit-cpu.xml
+     -->
+
+<!DOCTYPE feature SYSTEM "gdb-target.dtd">
+<target>
+    <architecture>riscv:rv32</architecture>
+
+    <feature name="org.gnu.gdb.riscv.cpu">
+        <reg name="zero" bitsize="32" type="int"/>
+        <reg name="ra" bitsize="32" type="code_ptr"/>
+        <reg name="sp" bitsize="32" type="data_ptr"/>
+        <reg name="gp" bitsize="32" type="data_ptr"/>
+        <reg name="tp" bitsize="32" type="data_ptr"/>
+        <reg name="t0" bitsize="32" type="int"/>
+        <reg name="t1" bitsize="32" type="int"/>
+        <reg name="t2" bitsize="32" type="int"/>
+        <reg name="fp" bitsize="32" type="data_ptr"/>
+        <reg name="s1" bitsize="32" type="int"/>
+        <reg name="a0" bitsize="32" type="int"/>
+        <reg name="a1" bitsize="32" type="int"/>
+        <reg name="a2" bitsize="32" type="int"/>
+        <reg name="a3" bitsize="32" type="int"/>
+        <reg name="a4" bitsize="32" type="int"/>
+        <reg name="a5" bitsize="32" type="int"/>
+        <reg name="a6" bitsize="32" type="int"/>
+        <reg name="a7" bitsize="32" type="int"/>
+        <reg name="s2" bitsize="32" type="int"/>
+        <reg name="s3" bitsize="32" type="int"/>
+        <reg name="s4" bitsize="32" type="int"/>
+        <reg name="s5" bitsize="32" type="int"/>
+        <reg name="s6" bitsize="32" type="int"/>
+        <reg name="s7" bitsize="32" type="int"/>
+        <reg name="s8" bitsize="32" type="int"/>
+        <reg name="s9" bitsize="32" type="int"/>
+        <reg name="s10" bitsize="32" type="int"/>
+        <reg name="s11" bitsize="32" type="int"/>
+        <reg name="t3" bitsize="32" type="int"/>
+        <reg name="t4" bitsize="32" type="int"/>
+        <reg name="t5" bitsize="32" type="int"/>
+        <reg name="t6" bitsize="32" type="int"/>
+        <reg name="pc" bitsize="32" type="code_ptr"/>
+    </feature>
+
+    <feature name="org.gnu.gdb.riscv.csr">
+        <reg name="misa"      bitsize="32"/>
+        <reg name="mvendorid" bitsize="32"/>
+        <reg name="marchid"   bitsize="32"/>
+        <reg name="mimpid"    bitsize="32"/>
+        <reg name="mhartid"   bitsize="32"/>
+        <reg name="minstret"  bitsize="32"/>
+        <reg name="mstatus"   bitsize="32"/>
+        <reg name="mie"       bitsize="32"/>
+        <reg name="mtvec"     bitsize="32"/>
+        <reg name="mip"       bitsize="32"/>
+        <reg name="mcause"    bitsize="32"/>
+        <reg name="mepc"      bitsize="32"/>
+        <reg name="mscratch"  bitsize="32"/>
+        <reg name="mtval"     bitsize="32"/>
+        <reg name="tselect"   bitsize="32"/>
+        <reg name="tdata1"    bitsize="32"/>
+        <reg name="tdata2"    bitsize="32"/>
+        <reg name="dcsr"      bitsize="32"/>
+        <reg name="dpc"       bitsize="32"/>
+        <reg name="dscratch0" bitsize="32"/>
+        <reg name="dscratch1" bitsize="32"/>
+    </feature>
+</target>
