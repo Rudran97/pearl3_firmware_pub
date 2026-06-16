@@ -1,0 +1,10 @@
+build/
+.DS_Store
+env/
+.venv/
+.env/
+
+__pycache__
+tags
+.clang-format
+.vscode/
