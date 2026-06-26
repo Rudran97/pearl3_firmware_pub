@@ -4,8 +4,11 @@ import time
 CMD_TRIG0      = 0xD0
 CMD_TRIG1      = 0xD1
 CMD_PC         = 0xD6
-CMD_REG        = 0xDA
-CMD_MEM        = 0xDB
+CMD_LOG_REG    = 0xDA
+CMD_SET_REG    = 0xEA
+CMD_LOG_MEM    = 0xDB
+CMD_SET_MEM    = 0xEB
+CMD_SET_VALUE  = 0xE6
 CMD_STEP       = 0xDC
 CMD_RESUME     = 0xDD
 CMD_ENTER      = 0xDE
@@ -156,6 +159,42 @@ class Debugger:
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
+        if cmd == CMD_SET_REG:
+            if code == "0000":
+                self.error("Set register", f" Response - '{resp}', UNDEF STATE - execute enter debug command.")
+                self.device_status = DeviceStatus.UNDEF
+            elif cmd_code in ['AF']:
+                self.error("Set register", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
+                self.device_status = DeviceStatus.TIMEOUT
+            else:
+                print("[INFO] Set register command executed successfully.")
+                self.device_status = DeviceStatus.STOPPED
+                return True
+            return False
+        if cmd == CMD_SET_MEM:
+            if code == "0000":
+                self.error("Set memory", f" Response - '{resp}', UNDEF STATE - execute enter debug command.")
+                self.device_status = DeviceStatus.UNDEF
+            elif cmd_code in ['AF']:
+                self.error("Set memory", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
+                self.device_status = DeviceStatus.TIMEOUT
+            else:
+                print("[INFO] Set memory command executed successfully.")
+                self.device_status = DeviceStatus.STOPPED
+                return True
+            return False
+        if cmd == CMD_SET_VALUE:
+            if code == "0000":
+                self.error("Set value", f" Response - '{resp}', UNDEF STATE - execute enter debug command.")
+                self.device_status = DeviceStatus.UNDEF
+            elif cmd_code in ['AF']:
+                self.error("Set value", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
+                self.device_status = DeviceStatus.TIMEOUT
+            else:
+                print("[INFO] Set value command executed successfully.")
+                self.device_status = DeviceStatus.STOPPED
+                return True
+            return False
         if cmd == CMD_STEP:
             if code == "0000":
                 self.error("Step", f" Response - '{resp}', UNDEF STATE - execute enter debug command.")
@@ -246,7 +285,7 @@ class Debugger:
         if not self.eval_response(CMD_EXIT_STEP, resp): print("[ERROR] Exit step")
 
     def log_reg_all(self):
-        self.cmd_to_debugger(CMD_REG)
+        self.cmd_to_debugger(CMD_LOG_REG)
         self.get_debugger_response(size=53*4)
 
         ### Expecting 32 GPRs and 21 CSRs ###
@@ -275,8 +314,18 @@ class Debugger:
 
             self.valid_status["reg"] = True
     
+    def setVal(self, value : str):
+        ## set the value and check the response
+        self.cmd_to_debugger(CMD_SET_VALUE, value)
+        self.get_debugger_response()
+        resp = self.pop_4bytes()
+        if self.eval_response(CMD_SET_VALUE, resp): print("[INFO] Value register set to ", value)
+        else: print("[ERROR] Set Value")
+
+        return None
+    
     def getMem(self, addr : str) -> str:
-        self.cmd_to_debugger(CMD_MEM, addr)
+        self.cmd_to_debugger(CMD_LOG_MEM, addr)
 
         self.get_debugger_response()
         resp = self.pop_4bytes()
@@ -284,6 +333,21 @@ class Debugger:
         if resp: return resp
         else: self.error("Read Mem", "debugger did not respond")
 
+        return None
+
+    def setMem(self, addr : str, value : str):
+        self.setVal(value)
+
+        ## set mem and check the response 
+        self.cmd_to_debugger(CMD_SET_MEM, addr)
+        self.get_debugger_response()
+        resp = self.pop_4bytes()
+        if self.eval_response(CMD_SET_MEM, resp): print(f"[INFO] Memory {addr} set.")
+        else: print("[ERROR] Set Memory")
+
+        for k, v in self.valid_status.items():
+            self.valid_status[k] = False
+        
         return None
 
     def getReg(self):
@@ -297,6 +361,27 @@ class Debugger:
             self.log_reg_all()
 
         return self.csr_val
+
+    def setReg(self, regno : str, value : str):
+        self.setVal(value)
+
+        ## set register and check the response 
+        self.cmd_to_debugger(CMD_SET_REG, regno)
+        self.get_debugger_response()
+        resp = self.pop_4bytes()
+        if self.eval_response(CMD_SET_REG, resp): print(f"[INFO] Register {regno} set.")
+        else: print("[ERROR] Set Register")
+
+        for k, v in self.valid_status.items():
+            self.valid_status[k] = False
+        
+        return None
+    
+    def setPC(self, value : str):
+        # set dpc to value
+        self.setReg("0x000007B1", value)
+
+        return None
 
     def getRom(self, page):
         contents = []

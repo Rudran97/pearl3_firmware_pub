@@ -142,11 +142,29 @@ def handleCommand(socket, command):
         data = bytearray()
         data = dbg.readMem(int(addr, 16), int(size, 16))
 
-        dataString = ""
-        for byte in data:
-            dataString = dataString + format(byte, '02x')
+        if data is None:
+            sendPacket(socket, "E01")
+        else:
+            dataString = ""
+            for byte in data:
+                dataString = dataString + format(byte, '02x')
 
-        sendPacket(socket, dataString)
+            sendPacket(socket, dataString)
+    elif "M" == command[0]:
+        """ M command received: 80000000,4:0df0adca
+            addr: 80000000, size: 4, data: 0df0adc -> little endian """
+
+        addrSizeData = command[1:]
+        addr = addrSizeData.split(",")[0]
+        size = (addrSizeData.split(",")[1]).split(":")[0]
+        data = (addrSizeData.split(",")[1]).split(":")[1]
+
+        print(f"M Command received: {addrSizeData}\naddr: {addr}, size: {size}, data: {data}")
+
+        if dbg.writeMem(int(addr, 16), data, int(size, 16)):
+            sendPacket(socket, "OK")
+        else:
+            sendPacket(socket, "E01")
     elif "g" == command:
         regs = dbg.readRegs()
         pc = dbg.readPC()
@@ -163,6 +181,20 @@ def handleCommand(socket, command):
             csrString = csrString + format(reg, '02x')
 
         sendPacket(socket, regString + pcString + csrString)
+    elif "G" == command[0]:
+        data = command[1:]
+        success = True
+
+        if len(data) !=  54 * 8:
+            sendPacket(socket, "E01")
+            return
+
+        for r in range(0, 54):
+            if not dbg.writeRegister(r, data[8*r:8*r+8]):
+                success = False
+                break
+
+        sendPacket(socket, "OK" if success else "E01")
     elif "k" == command[0]:
         dbg.cleanup()
         quit()
@@ -193,6 +225,16 @@ def handleCommand(socket, command):
                 for b in pc:
                     pcString = pcString + format(b, '02x')
                 sendPacket(socket, pcString)
+    elif "P" == command[0]:
+        """ P command received: 20=0df0adca """
+        regnoData = command[1:] 
+        regno = regnoData.split("=")[0]
+        data = regnoData.split("=")[1]
+
+        if dbg.writeRegister(int(regno, 16), data):
+            sendPacket(socket, "OK")
+        else:
+            sendPacket(socket, "E01")
     else:
         sendPacket(socket, "")
 
