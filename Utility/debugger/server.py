@@ -6,6 +6,59 @@ import signal
 import sys
 import select
 import argparse
+import time
+
+class RSPParser:
+    def __init__(self):
+        self.buffer = ""
+
+    def feed(self, data):
+        """
+        Feed arbitrary chunks received from recv() into feed().
+        The parser buffers incomplete packets and returns only
+        complete packets.
+
+        data : bytes returned by socket.recv()
+
+        Returns:
+            list of (payload, checksum)
+        """
+
+        # Append newest TCP data
+        self.buffer += data.decode("ascii", errors="ignore")
+        packets = []
+
+        while True:
+            # Discard everything before '$'
+            start = self.buffer.find("$")
+
+            if start == -1:
+                self.buffer = ""
+                break
+
+            if start > 0:
+                self.buffer = self.buffer[start:]
+                start = 0
+
+            # Wait until '#' arrives
+            hash_pos = self.buffer.find("#", start)
+
+            if hash_pos == -1:
+                break
+
+            # Wait until checksum arrives
+            if len(self.buffer) < hash_pos + 3:
+                break
+
+            payload = self.buffer[start + 1 : hash_pos]
+            checksum = self.buffer[hash_pos + 1 : hash_pos + 3]
+            packets.append((payload, checksum))
+
+            # Remove processed packet
+            self.buffer = self.buffer[hash_pos + 3:]
+
+        return packets
+
 
 HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
 PORT = 3333         # Port to listen on (non-privileged ports are > 1023)
@@ -18,6 +71,8 @@ help_msg = "Supported commands:\n" \
            "halt          - Halt execution and enter debug mode.\n" \
            "status        - Current status of the microcontroller.\n" \
            "breakpoints   - Currently active breakpoints.\n" \
+           "capture       - Prepare to receive a firmware image from the next GDB 'load' command.\n" \
+           "flash         - Flash the firmware image stored in memory into target \n" \
            "help          - Display this.\n"
 
 SIGTRAP = "S05"
@@ -39,6 +94,8 @@ def sendPacket(socket, packetData):
 
 def handleCommand(socket, command):
     # Required support g, m, c, q, p, z, and s
+    dbg.finish_receive(command[0])
+
     global last_SIGVAL
     if "?" == command[0]:
         sendPacket(socket, last_SIGVAL)
@@ -62,7 +119,7 @@ def handleCommand(socket, command):
                 sendPacket(socket, "Text=000;Data=000;Bss=000")
                 return
             elif "Rcmd" in query:
-                cmd = bytes.fromhex(query.split(',')[1]).decode("ascii")
+                cmd = ' '.join(bytes.fromhex(query.split(',')[1]).decode("ascii").split())
 
                 if cmd == "reset":
                     dbg.reset()
@@ -83,6 +140,17 @@ def handleCommand(socket, command):
                 elif cmd == "breakpoints":
                     string = dbg.monitor_breakpoints()
                     sendPacket(socket, string.encode("ascii").hex())
+                    return
+                elif cmd == "capture":
+                    # Loading firmware with binary write is not supported instead this command would initialize the firmware image.
+                    dbg.begin_image()
+                    sendPacket(socket, "Ready to receive firmware.\n".encode("ascii").hex())
+                    return
+                elif cmd == "flash":
+                    if dbg.download_image():
+                        sendPacket(socket, "Done downloading image into target.\n".encode("ascii").hex())
+                    else:
+                        sendPacket(socket, "Error while trying to download image into target.\n".encode("ascii").hex())
                     return
                 elif cmd == "help":
                     sendPacket(socket, help_msg.encode("ascii").hex())
@@ -159,12 +227,19 @@ def handleCommand(socket, command):
         size = (addrSizeData.split(",")[1]).split(":")[0]
         data = (addrSizeData.split(",")[1]).split(":")[1]
 
-        print(f"M Command received: {addrSizeData}\naddr: {addr}, size: {size}, data: {data}")
-
-        if dbg.writeMem(int(addr, 16), data, int(size, 16)):
-            sendPacket(socket, "OK")
+        if dbg.loader.active:
+            if dbg.save_firmware_image(int(addr, 16), data, int(size, 16)):
+                sendPacket(socket, "OK")
+            else:
+                sendPacket(socket, "E01")
         else:
-            sendPacket(socket, "E01")
+            if dbg.writeMem(int(addr, 16), data, int(size, 16)):
+                sendPacket(socket, "OK")
+            else:
+                sendPacket(socket, "E01")
+    elif "X" == command[0]:
+        # dbg.begin_image()
+        sendPacket(socket, "")
     elif "g" == command:
         regs = dbg.readRegs()
         pc = dbg.readPC()
@@ -242,26 +317,35 @@ def readRegs(n):
     return "0"*2*n
 
 def handleData(socket, data):
-    if data.decode("ascii").count("$") > 0:
-        for n in range(data.decode("ascii").count("$")):
-            validData = True
-            data = data.decode("ascii")
-            checksum = (data.split("#")[1])[:2]
-            packet_data = (data.split("$")[1]).split("#")[0]
-            if int(checksum, 16) != sum(packet_data.encode("ascii")) % 256:
-                print("Checksum Wrong!")
-                validData = False
-            commands = []
-            if validData:
-                socket.sendall(b"+")
-            else:
-                socket.sendall(b"-")
-            handleCommand(socket, packet_data)
-    elif data == b"\x03":
+    if data == b"\x03":
         print("GDB pressed Ctrl-C")
         dbg.stop()
         socket.sendall(b"+")
         sendPacket(socket, SIGTRAP)
+        return
+
+    # Feed TCP stream into parser
+    packets = rsp.feed(data)
+
+    for payload, checksum in packets:
+        # Verify checksum
+        calc = sum(payload.encode("ascii")) & 0xff
+
+        try:
+            recv = int(checksum, 16)
+        except ValueError:
+            socket.sendall(b"-")
+            continue
+
+        if calc != recv:
+            print(f"Checksum error: received={checksum} expected={calc:02x}")
+            socket.sendall(b"-")
+            continue
+
+        # ACK packet
+        socket.sendall(b"+")
+        # Execute command
+        handleCommand(socket, payload)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pearl gdb-server:")
@@ -272,6 +356,8 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--speed', help="Serial communication speed", type=int, default=115200)
     parser.add_argument('--dtot', help="Debug timeout timer in seconds (must be in integer and value >= 1)", type=int, default=3)
     parser.add_argument('--xml', help="Device xml file containing information of registers", type=str)
+    parser.add_argument('--silent-all', help="Silent all terminal outputs", action='store_true')
+    parser.add_argument('--silent-info', help="Silent only info terminal outputs", action='store_true')
 
     args = parser.parse_args()
 
@@ -280,6 +366,12 @@ if __name__ == "__main__":
     speed = args.speed
     dtot = args.dtot
     device_xml = args.xml
+
+    silent = "none"
+    if args.silent_all:
+        silent = "all"
+    elif args.silent_info:
+        silent = "info"
 
     read_timeout = dtot + 0.5  # Transport layer read timeout is
 
@@ -290,19 +382,23 @@ if __name__ == "__main__":
         ## e.g. "1387f9ff" -> 5000 * 1 ms : "f9ff" represents the prescale value that sets the timer to 1 ms. 5000 - 1 = 1387 in hex
         dtot_to_hex = "0x" + f"{(dtot*1000 - 1):04x}"[-4:] + "f9ff"
 
-    print("Device: ", device_id)
-    print("Port: ", port)
-    print("Speed: ", speed)
-    print("dtot: ", dtot)
-    print("Device xml: ", device_xml)
+    print("Device:", device_id)
+    print("Port:", port)
+    print("Speed:", speed)
+    print("dtot:", dtot)
+    print("Device xml:", device_xml)
+    print("Silent debug output:", silent)
 
     dbg = debugBridge.DebugBridge(device_id=device_id,
                                 comm_port=port,
                                 speed=speed,
                                 dtot=dtot_to_hex,
-                                read_timeout=read_timeout)
+                                read_timeout=read_timeout,
+                                silent=silent)
     dbg.stop()
     dbg.breakpointHWClear()
+
+    rsp = RSPParser()
 
     print("Waiting for GDB session " + str(HOST) + ":" + str(PORT))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -316,6 +412,6 @@ if __name__ == "__main__":
                 # Should iterate through buffer and take out commands/escape characters
                 ready = select.select([conn], [], [], 0.5)
                 if ready[0]:
-                    data = conn.recv(1024)
+                    data = conn.recv(8192)
                     if len(data) > 0:
                         handleData(conn, data)

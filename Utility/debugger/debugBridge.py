@@ -9,19 +9,30 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 import Loader
 
 class DebugBridge(dbg.DeviceStatus):
-    def __init__(self, device_id, comm_port, speed, dtot, read_timeout):
+    def __init__(self, device_id, comm_port, speed, dtot, read_timeout, silent="none"):
         self.dbg = dbg.Debugger(
             device_id=device_id,
             comm_port=comm_port,
             speed=speed,
             read_timeout=read_timeout,
-            test_mode=False
+            test_mode=False,
+            silent=silent
         )
+
+        self.loader = ImageLoader()
 
         self.device_id = device_id
         self.comm_port = comm_port
         self.speed = speed
         self.dtot = dtot
+        self.silent_log = [""]
+
+        if silent == "none":
+            pass
+        elif silent == "info":
+            self.silent_log = ["info"]
+        elif silent == "all":
+            self.silent_log = ["info", "error"]
 
         self.breakpoints = {
             0: None,
@@ -52,12 +63,16 @@ class DebugBridge(dbg.DeviceStatus):
             52: 0x7B2, # dscratch0
             53: 0x7B3, # dscratch1
         }
+
+    def logging(self, msg, log_type):
+        if log_type not in self.silent_log:
+            print(msg)
     
     def ensure_debug_mode(self, cmd : str):
         tries = 0
 
         while (self.dbg.device_status != self.STOPPED and tries < 3):
-            print(f"Trying to execute '{cmd}'. Device not halted. Entering debug mode.")
+            self.logging(f"Trying to execute '{cmd}'. Device not halted. Entering debug mode.", "info")
             self.stop()
             self.monitor_status()
 
@@ -135,8 +150,8 @@ class DebugBridge(dbg.DeviceStatus):
         self.ensure_debug_mode("read memory")
         data = bytearray()
 
-        print(f"Original read request {hex(addr)} onwards, size {size} bytes")
-        print(f"Reading from memory address {hex(align_addr)} onwards, size {bytes_needed} bytes")
+        self.logging(f"Original read request {hex(addr)} onwards, size {size} bytes", "info")
+        self.logging(f"Reading from memory address {hex(align_addr)} onwards, size {bytes_needed} bytes", "info")
 
         for w in range (0, math.ceil(bytes_needed / 4)):
             mem  = self.dbg.getMem(hex(align_addr + (w << 2)))     # returns mem value as a hex string e.g "aabbccdd"
@@ -145,7 +160,7 @@ class DebugBridge(dbg.DeviceStatus):
 
             mem_ba = bytearray.fromhex(mem)                        # convert mem in the form of : bytearray(b'\xaa\xbb\xcc\xdd')
             mem_ba.reverse()                                       # reverse the order : bytearray(b'\xdd\xcc\xbb\xaa')
-            print(f"@ {hex(align_addr + (w << 2))} : {mem}")
+            self.logging(f"@ {hex(align_addr + (w << 2))} : {mem}", "info")
 
             data = data + mem_ba
         
@@ -252,7 +267,7 @@ class DebugBridge(dbg.DeviceStatus):
                 old_data_le = self.dbg.getMem(hex(align_addr + (w << 2))) # returns mem value as a hex string e.g "aabbccdd" - little endian
                                                                           # i.e. "aa" sits at the lowest memory address
                 if old_data_le is None:
-                    print("[ERROR] Incompatible data.")
+                    self.logging("[ERROR] Incompatible data.", "error")
                     return False
                 # Reorder bytes (little endian to big endian)
                 old_data = self.reverse_endian(old_data_le)
@@ -273,7 +288,7 @@ class DebugBridge(dbg.DeviceStatus):
                 old_data_le = self.dbg.getMem(hex(align_addr + (w << 2))) # returns mem value as a hex string e.g "aabbccdd" - little endian
                                                                           # i.e. "aa" sits at the lowest memory address
                 if old_data_le is None:
-                    print("[ERROR] Incompatible data.")
+                    self.logging("[ERROR] Incompatible data.", "error")
                     return False
                 # Reorder bytes (little endian to big endian)
                 old_data = self.reverse_endian(old_data_le)
@@ -407,6 +422,42 @@ class DebugBridge(dbg.DeviceStatus):
         time.sleep(0.5)
         Loader.deliver_machine_code("", self.comm_port, self.speed, self.device_id, "rh")
         self.stop(prg_halt=True)
+    
+    def begin_image(self):
+        self.loader.begin()
+    
+    def save_firmware_image(self, address : int, data : str, size : int):
+        if not self.loader.add_section(address, data, size):
+            self.logging("[ERROR] Inactive image section cannot be modified.", "error")
+            return False
+        
+        return True
+    
+    def finish_receive(self, command):
+        if command == "X":
+            return
+
+        if self.loader.active and command != "M":
+            self.logging("Firmware image successfully stored.", "system")
+            self.loader.done()
+
+    def download_image(self):
+        self.loader.done()
+
+        self.logging(f"[INFO] Programming target with {len(self.loader.image)} sections ...", "system")
+        for section in self.loader.image:
+            if section.valid:
+                self.logging(f"[INFO] Programming section at address: {hex(section.address)}, size: {hex(section.size)}", "system")
+                self.writeMem(section.address, section.data, section.size)
+            else:
+                self.logging("[ERROR] Image cannot to download into target - Invalid section", "error")
+                return False
+        self.logging(f"[INFO] Done programming.", "system")
+        
+        return True
+
+    def erase_firmware(self):
+        pass
 
     def monitor_status(self):
         string = "Debug error. Execute halt command to re-enter debug mode.\n"
@@ -436,3 +487,48 @@ class DebugBridge(dbg.DeviceStatus):
     def cleanup(self):
         self.dbg.Exit()
         return self.dbg.device_status
+
+class ImageLoader:
+    """
+    Save Firmware image in memory that would be loaded into the target later.
+    
+    begin() - Prepare the to receive new image.
+    add_section(...) - Add firmware as memory chunks.
+    done() - Freeze any new additions into the current image.
+    clear() - Remove any existing image.
+    """
+    def __init__(self):
+        self.image = []
+        self.active = False
+    
+    def begin(self):
+        self.clear_image()
+        self.active = True
+    
+    def add_section(self, address : int, data : str, size : int):
+        if self.active:
+            self.image.append(FirmwareSection(address, data, size))
+            return True
+
+        return False
+    
+    def done(self):
+        self.active = False
+
+    def clear_image(self):
+        self.image.clear()
+        self.active = False
+
+class FirmwareSection:
+    """
+    Organises the firmware information into image objects to be loaded into the target.
+    """
+    def __init__(self, address : int, data : str, size : int):
+        self.address = address
+        self.data = data
+        self.size = size
+        self.valid = True
+
+        if size != len(data)//2:
+            print(f"[ERROR] While loading Firmware Image - size {size} does not match with the size of data {len(data)//2}")
+            self.valid = False

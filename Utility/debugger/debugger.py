@@ -46,12 +46,21 @@ class Debugger:
         }
     }
 
-    def __init__(self, device_id, comm_port, speed=115200, read_timeout=3, test_mode=False):
+    def __init__(self, device_id, comm_port, speed=115200, read_timeout=3, test_mode=False, silent="none"):
         self.device_id = device_id
         self.comm_port = comm_port
         self.speed = speed
         self.read_timeout = read_timeout
         self.test_mode = test_mode
+        
+        self.silent_log = [""]
+
+        if silent == "none":
+            pass
+        elif silent == "info":
+            self.silent_log = ["info"]
+        elif silent == "all":
+            self.silent_log = ["info", "error"]
 
         self.response = []
         self.response_size = 0
@@ -109,8 +118,15 @@ class Debugger:
             self.response_size = 4
     
     def error(self, cmd, error_type):
-        print("[ERROR] Command ", cmd, " could not be executed")
-        print("[INFO]  ", error_type)
+        self.logging(f"[ERROR] Command {cmd} could not be executed", log_type="error")
+        self.logging(f"[INFO] {error_type}", log_type="error")
+    
+    def info(self, msg):
+        self.logging(msg, log_type="info")
+    
+    def logging(self, msg, log_type):
+        if log_type not in self.silent_log:
+            print(msg)
     
     def eval_response(self, cmd, resp):
         """
@@ -143,7 +159,7 @@ class Debugger:
                 self.error("Trigger 0", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Trigger 0 command executed successfully.")
+                self.info("[INFO] Trigger 0 command executed successfully.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -155,7 +171,7 @@ class Debugger:
                 self.error("Trigger 1", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Trigger 1 command executed successfully.")
+                self.info("[INFO] Trigger 1 command executed successfully.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -167,7 +183,7 @@ class Debugger:
                 self.error("Set register", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Set register command executed successfully.")
+                self.info("[INFO] Set register command executed successfully.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -179,7 +195,7 @@ class Debugger:
                 self.error("Set memory", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Set memory command executed successfully.")
+                self.info("[INFO] Set memory command executed successfully.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -191,7 +207,7 @@ class Debugger:
                 self.error("Set value", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Set value command executed successfully.")
+                self.info("[INFO] Set value command executed successfully.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -203,7 +219,7 @@ class Debugger:
                 self.error("Step", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] In step mode.")
+                self.info("[INFO] In step mode.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -215,7 +231,7 @@ class Debugger:
                 self.error("Resume", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Resuming execution.")
+                self.info("[INFO] Resuming execution.")
                 self.device_status = DeviceStatus.RUNNING
                 return True
             return False
@@ -227,7 +243,7 @@ class Debugger:
                 self.error("Enter debug", f" Response - '{resp}', INVALID CMD - debugger already in debug mode.")
                 self.device_status = DeviceStatus.STOPPED
             else:
-                print("[INFO] Entered debug mode.")
+                self.info("[INFO] Entered debug mode.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -239,7 +255,7 @@ class Debugger:
                 self.error("Exit step", f" Response - '{resp}', TIMEOUT - debugger responded with timeout error.")
                 self.device_status = DeviceStatus.TIMEOUT
             else:
-                print("[INFO] Exiting step mode.")
+                self.info("[INFO] Exiting step mode.")
                 self.device_status = DeviceStatus.STOPPED
                 return True
             return False
@@ -271,7 +287,7 @@ class Debugger:
         resp = self.pop_4bytes()
 
         if not self.eval_response(CMD_ENTER, resp):
-            print("[ERROR] Enter debug")
+            self.logging("[ERROR] Enter debug", "error")
             return False
         
         return True
@@ -282,7 +298,7 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if not self.eval_response(CMD_EXIT_STEP, resp): print("[ERROR] Exit step")
+        if not self.eval_response(CMD_EXIT_STEP, resp): self.logging("[ERROR] Exit step", "error")
 
     def log_reg_all(self):
         self.cmd_to_debugger(CMD_LOG_REG)
@@ -319,8 +335,8 @@ class Debugger:
         self.cmd_to_debugger(CMD_SET_VALUE, value)
         self.get_debugger_response()
         resp = self.pop_4bytes()
-        if self.eval_response(CMD_SET_VALUE, resp): print("[INFO] Value register set to ", value)
-        else: print("[ERROR] Set Value")
+        if self.eval_response(CMD_SET_VALUE, resp): self.info(f"[INFO] Value register set to {value}")
+        else: self.logging("[ERROR] Set Value", "error")
 
         return None
     
@@ -342,8 +358,8 @@ class Debugger:
         self.cmd_to_debugger(CMD_SET_MEM, addr)
         self.get_debugger_response()
         resp = self.pop_4bytes()
-        if self.eval_response(CMD_SET_MEM, resp): print(f"[INFO] Memory {addr} set.")
-        else: print("[ERROR] Set Memory")
+        if self.eval_response(CMD_SET_MEM, resp): self.info(f"[INFO] Memory {addr} set.")
+        else: self.logging("[ERROR] Set Memory", "error")
 
         for k, v in self.valid_status.items():
             self.valid_status[k] = False
@@ -369,8 +385,8 @@ class Debugger:
         self.cmd_to_debugger(CMD_SET_REG, regno)
         self.get_debugger_response()
         resp = self.pop_4bytes()
-        if self.eval_response(CMD_SET_REG, resp): print(f"[INFO] Register {regno} set.")
-        else: print("[ERROR] Set Register")
+        if self.eval_response(CMD_SET_REG, resp): self.info(f"[INFO] Register {regno} set.")
+        else: self.logging("[ERROR] Set Register", "error")
 
         for k, v in self.valid_status.items():
             self.valid_status[k] = False
@@ -451,8 +467,8 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if self.eval_response(CMD_RESUME, resp): print("[INFO] Exiting debug mode.")
-        else: print("[ERROR] Exit debug")
+        if self.eval_response(CMD_RESUME, resp): self.info("[INFO] Exiting debug mode.")
+        else: self.logging("[ERROR] Exit debug", "error")
 
         for k, v in self.valid_status.items():
             self.valid_status[k] = False
@@ -466,9 +482,9 @@ class Debugger:
         resp = self.pop_4bytes()
 
         if self.eval_response(CMD_RESUME, resp):
-            print("[INFO] Stepping over 1 instruction.")
+            self.info("[INFO] Stepping over 1 instruction.")
             self.device_status = DeviceStatus.STOPPED
-        else: print("[ERROR] Step")
+        else: self.logging("[ERROR] Step", "error")
 
         for k, v in self.valid_status.items():
             self.valid_status[k] = False
@@ -485,15 +501,15 @@ class Debugger:
 
         if self.eval_response(CMD_RESUME, resp):
             if resp[4:].upper() in ['DD00']:
-                print("[INFO] Exiting debug mode - no trigger set")
+                self.info("[INFO] Exiting debug mode - no trigger set")
                 status = ContinueStatus.NO_TRIGGER
                 self.device_status = DeviceStatus.RUNNING
             else:
-                print("[INFO] Trigger Hit!")
+                self.info("[INFO] Trigger Hit!")
                 status = ContinueStatus.HIT
                 self.device_status = DeviceStatus.STOPPED
         else:
-            print("[ERROR] Continue")
+            self.logging("[ERROR] Continue", "error")
             status = ContinueStatus.ERROR
             self.device_status = DeviceStatus.ERROR
 
@@ -508,8 +524,8 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if self.eval_response(CMD_TRIG0, resp): print("[INFO] Trigger 0 set to ", addr)
-        else: print("[ERROR] Set Trigger 0")
+        if self.eval_response(CMD_TRIG0, resp): self.info(f"[INFO] Trigger 0 set to {addr}")
+        else: self.logging("[ERROR] Set Trigger 0", "error")
 
         return resp
 
@@ -519,8 +535,8 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if self.eval_response(CMD_TRIG1, resp): print("[INFO] Trigger 1 set to ", addr)
-        else: print("[ERROR] Set Trigger 1")
+        if self.eval_response(CMD_TRIG1, resp): self.info(f"[INFO] Trigger 1 set to {addr}")
+        else: self.logging("[ERROR] Set Trigger 1", "error")
 
         return resp
 
@@ -530,8 +546,8 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if self.eval_response(CMD_TRIG0, resp): print("[INFO] Trigger 0 removed.")
-        else: print("[ERROR] Remove Trigger 0")
+        if self.eval_response(CMD_TRIG0, resp): self.info("[INFO] Trigger 0 removed.")
+        else: self.logging("[ERROR] Remove Trigger 0", "error")
 
         return resp
 
@@ -541,8 +557,8 @@ class Debugger:
         self.get_debugger_response()
         resp = self.pop_4bytes()
 
-        if self.eval_response(CMD_TRIG1, resp): print("[INFO] Trigger 1 removed.")
-        else: print("[ERROR] Remove Trigger 1")
+        if self.eval_response(CMD_TRIG1, resp): self.info("[INFO] Trigger 1 removed.")
+        else: self.logging("[ERROR] Remove Trigger 1", "error")
 
         return resp
 
