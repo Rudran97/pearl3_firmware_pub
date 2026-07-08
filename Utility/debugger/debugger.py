@@ -351,8 +351,9 @@ class Debugger:
 
         return None
 
-    def setMem(self, addr : str, value : str):
-        self.setVal(value)
+    def setMem(self, addr : str, value : str, ignore_value : bool = False):
+        if not ignore_value:
+            self.setVal(value)
 
         ## set mem and check the response 
         self.cmd_to_debugger(CMD_SET_MEM, addr)

@@ -64,6 +64,15 @@ class DebugBridge(dbg.DeviceStatus):
             53: 0x7B3, # dscratch1
         }
 
+        self.ram_start = self.dbg.devices.get(self.device_id).get("ram")[0]
+        self.ram_size_word = self.dbg.devices.get(self.device_id).get("ram")[1]
+        self.rom_start = self.dbg.devices.get(self.device_id).get("rom")[0]
+        self.rom_size_word = self.dbg.devices.get(self.device_id).get("rom")[1]
+        self.io_start = self.dbg.devices.get(self.device_id).get("io")[0]
+        self.io_size_word = self.dbg.devices.get(self.device_id).get("io")[1]
+        self.clic_start = self.dbg.devices.get(self.device_id).get("clic")[0]
+        self.clic_size_word = self.dbg.devices.get(self.device_id).get("clic")[1]
+
     def logging(self, msg, log_type):
         if log_type not in self.silent_log:
             print(msg)
@@ -169,7 +178,7 @@ class DebugBridge(dbg.DeviceStatus):
     def reverse_endian(self, word: str):
         return "".join(reversed([word[i:i+2] for i in range(0,8,2)]))
 
-    def writeMem(self, address : int, value : str, size : int = 1):
+    def writeMem(self, address : int, value : str, size : int = 1, ignore_value : bool = False):
         """
         write value to register memory location address.
         """
@@ -298,7 +307,7 @@ class DebugBridge(dbg.DeviceStatus):
 
             # Reorder bytes (big endian to little endian)
             new_data_le = self.reverse_endian(new_data)
-            self.dbg.setMem(hex(align_addr + (w << 2)), new_data_le)
+            self.dbg.setMem(hex(align_addr + (w << 2)), new_data_le, ignore_value)
         
         return True
 
@@ -438,26 +447,93 @@ class DebugBridge(dbg.DeviceStatus):
             return
 
         if self.loader.active and command != "M":
-            self.logging("Firmware image successfully stored.", "system")
+            self.logging(f"Freezing firmware image, {len(self.loader.image)} sections added.", "system")
             self.loader.done()
 
-    def download_image(self):
+    def download_image(self, image_section : str = "all"):
         self.loader.done()
 
-        self.logging(f"[INFO] Programming target with {len(self.loader.image)} sections ...", "system")
+        if image_section == "all": self.logging(f"[INFO] Programming target with {len(self.loader.image)} sections ...", "system")
         for section in self.loader.image:
-            if section.valid:
-                self.logging(f"[INFO] Programming section at address: {hex(section.address)}, size: {hex(section.size)}", "system")
-                self.writeMem(section.address, section.data, section.size)
+            if image_section == "all":
+                if section.valid:
+                    self.logging(f"[INFO] Programming section at address: {hex(section.address)}, size: {hex(section.size)}", "system")
+                    self.writeMem(section.address, section.data, section.size)
+                else:
+                    self.logging("[ERROR] Image cannot be downloaded into target - Invalid section", "error")
+                    return False
             else:
-                self.logging("[ERROR] Image cannot to download into target - Invalid section", "error")
-                return False
+                region_start = int(self.dbg.devices.get(self.device_id).get(image_section)[0], 16)
+                region_end = region_start + 4*self.dbg.devices.get(self.device_id).get(image_section)[1] - 1
+
+                if section.valid and (region_start <= section.address <= region_end):
+                    self.logging(f"[INFO] Programming section at address: {hex(section.address)}, size: {hex(section.size)}", "system")
+                    self.writeMem(section.address, section.data, section.size)
+                else:
+                    self.logging(f"[INFO] Skipping section at address: {hex(section.address)}", "system")
         self.logging(f"[INFO] Done programming.", "system")
         
         return True
 
     def erase_firmware(self):
-        pass
+        self.loader.clear_image()
+
+    def erase_target_firmware(self, image_section : str = "all"):
+        self.logging(f"[INFO] Erasing {image_section} sections from target ...", "system")
+
+        # Set value register now and ignore re-writing it again for subsequent memory addresses
+        self.dbg.setVal("00"*4)
+        if image_section == "ram":
+            self.writeMem(int(self.ram_start, 16), "00"*self.ram_size_word*4, self.ram_size_word*4, ignore_value=True)
+        elif image_section == "rom":
+            self.writeMem(int(self.rom_start, 16), "00"*self.rom_size_word*4, self.rom_size_word*4, ignore_value=True)
+        else:
+            self.writeMem(int(self.ram_start, 16), "00"*self.ram_size_word*4, self.ram_size_word*4, ignore_value=True)
+            self.writeMem(int(self.rom_start, 16), "00"*self.rom_size_word*4, self.rom_size_word*4, ignore_value=True)
+
+        self.logging(f"[INFO] Done erasing.", "system")
+
+        return True
+
+    def inspect_image(self):
+        string = "No firmware image found.\n" \
+
+        if self.loader.image:
+            string = "Firmware Image:\n" \
+                    "---------------\n"
+            string += f"Sections   : {len(self.loader.image)}\n"
+            size = 0
+            for section in self.loader.image:
+                size += section.size
+            string += f"Total Size : {size}\n"
+            string += "\n"
+
+            ram_section = "RAM\n"
+            ram_start = int(self.ram_start, 16)
+            ram_end = int(self.ram_start, 16) + self.ram_size_word*4 - 1
+            rom_start = int(self.rom_start, 16)
+            rom_section = "ROM\n"
+            rom_end = int(self.rom_start, 16) + self.rom_size_word*4 - 1
+            for section in self.loader.image:
+                if section.valid:
+                    if rom_start <= section.address <= rom_end:
+                        rom_section += f"{hex(section.address)} size {section.size} bytes\n"
+
+                    if ram_start <= section.address <= ram_end:
+                        ram_section += f"{hex(section.address)} size {section.size} bytes\n"
+
+            string += ram_section + "\n" + rom_section
+
+        return string
+    
+    def memory_region(self):
+        string = f"Device ID {self.device_id.upper()}\n"
+        string += f"RAM\n{self.ram_start} - {hex(int(self.ram_start, 16) + self.ram_size_word*4 - 1)}  size {self.ram_size_word*4} bytes\n"
+        string += f"CLIC\n{self.clic_start} - {hex(int(self.clic_start, 16) + self.clic_size_word*4 - 1)}  size {self.clic_size_word*4} bytes\n"
+        string += f"IO\n{self.io_start} - {hex(int(self.io_start, 16) + self.io_size_word*4 - 1)}  size {self.io_size_word*4} bytes\n"
+        string += f"ROM\n{self.rom_start} - {hex(int(self.rom_start, 16) + self.rom_size_word*4 - 1)}  size {self.rom_size_word*4} bytes\n"
+        
+        return string
 
     def monitor_status(self):
         string = "Debug error. Execute halt command to re-enter debug mode.\n"

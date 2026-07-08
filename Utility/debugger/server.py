@@ -59,21 +59,120 @@ class RSPParser:
 
         return packets
 
+class MonitorParser:
+    HELP_MSG = """
+            Supported commands:
+            reset [halt]             - Execute a soft reset of the target [and halt execution].
+            halt                     - Halt execution and enter debug mode.
+            info [status]            - Current status of the target.
+                 [breakpoints|break] - Active breakpoints.
+                 [image]             - Information about the firmware image stored in memory.
+                 [memory]            - Target memory regions.
+            capture                  - Prepare to receive a firmware image from the next GDB 'load' command.
+            flash [rom:ram]          - Flash the firmware image stored in memory into target [only rom or ram section].
+            erase image              - Erase firmware image stored in memory.
+                  target [rom:ram]   - Erase all sections of the target [only rom or ram section of the target].
+            help                     - Display this.
+"""
+    
+    def __init__(self, debugger):
+        self.dbg = debugger
+    
+    @staticmethod
+    def rsp_string(string: str):
+        return string.encode("ascii").hex() 
+
+    def execute(self, command : str = ""):
+        cmd = ' '.join(command.split()).split() # remove extra spaces and trailings spaces, after that split it into sub commands
+
+        if len(cmd) > 0:
+            if cmd[0] == "reset":
+                if len(cmd) > 2:
+                    return self.rsp_string(f"Command '{cmd[0]}' takes only one optional parameter.\n")
+                if len(cmd) > 1:
+                    if cmd[1] == "halt":
+                        self.dbg.reset_and_halt()
+                        return "OK"
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+                else:
+                    self.dbg.reset()
+                    return "OK"
+            elif cmd[0] == "halt":
+                self.dbg.stop()
+                return "OK"
+            elif cmd[0] == "info":
+                if  len(cmd) == 1:
+                    string, _ = self.dbg.monitor_status()
+                    return string.encode("ascii").hex()
+                elif len(cmd) == 2:
+                    if cmd[1] in ["breakpoints", "break"]:
+                        string = self.dbg.monitor_breakpoints()
+                        return string.encode("ascii").hex()
+                    elif cmd[1] == "status":
+                        string, _ = self.dbg.monitor_status()
+                        return string.encode("ascii").hex()
+                    elif cmd[1] == "image":
+                        string = self.dbg.inspect_image()
+                        return string.encode("ascii").hex()
+                    elif cmd[1] == "memory":
+                        string = self.dbg.memory_region()
+                        return string.encode("ascii").hex()
+
+                return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+            elif cmd[0] == "capture":
+                # Loading firmware with binary write is not supported instead this command would initialize the firmware image.
+                self.dbg.begin_image()
+                return self.rsp_string("Ready to receive firmware.\n")
+            elif cmd[0] == "flash":
+                if len(cmd) > 2:
+                    return self.rsp_string(f"Command '{cmd[0]}' takes only one optional parameter.\n")
+                if len(cmd) > 1:
+                    if cmd[1] == "rom":
+                        if self.dbg.download_image("rom"): return self.rsp_string("Done downloading rom image into target.\n")
+                        else: return self.rsp_string("Error while trying to rom download image into target.\n")
+                    elif cmd[1] == "ram":
+                        if self.dbg.download_image("ram"): return self.rsp_string("Done downloading ram image into target.\n")
+                        else: return self.rsp_string("Error while trying to ram download image into target.\n")
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+                else:
+                    if self.dbg.download_image("all"): return self.rsp_string("Done downloading image into target.\n")
+                    else: return self.rsp_string("Error while trying to download image into target.\n")
+            elif cmd[0] == "erase":
+                if len(cmd) == 3:
+                    # 3 parameters passed
+                    if cmd[1] == "target":
+                        if cmd[2] == "rom":
+                            self.dbg.erase_target_firmware("rom")
+                            return self.rsp_string("Erased rom image from target.\n")
+                        elif cmd[2] == "ram":
+                            self.dbg.erase_target_firmware("ram")
+                            return self.rsp_string("Erased ram image from target.\n")
+                        else:
+                            return self.rsp_string(f"Invalid parameter '{cmd[2]}' after '{cmd[1]}'.\n")
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+                elif len(cmd) == 2:
+                    # 2 parameters passed
+                    if cmd[1] == "image":
+                        self.dbg.erase_firmware()
+                        return self.rsp_string("Erased firmware image from host.\n")
+                    elif cmd[1] == "target":
+                        self.dbg.erase_target_firmware("all")
+                        return self.rsp_string("Erased firmware image from target.\n")
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+
+                return self.rsp_string(f"Passed too less or too many parameters for command {cmd[0]}.\n")
+
+        return self.rsp_string(self.HELP_MSG)
+
 
 HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
 PORT = 3333         # Port to listen on (non-privileged ports are > 1023)
 
 lastPacket = ""
-
-help_msg = "Supported commands:\n" \
-           "reset         - Execute a soft reset of the microcontroller.\n" \
-           "rest halt     - Execute a soft reset of the microcontroller and halt execution.\n" \
-           "halt          - Halt execution and enter debug mode.\n" \
-           "status        - Current status of the microcontroller.\n" \
-           "breakpoints   - Currently active breakpoints.\n" \
-           "capture       - Prepare to receive a firmware image from the next GDB 'load' command.\n" \
-           "flash         - Flash the firmware image stored in memory into target \n" \
-           "help          - Display this.\n"
 
 SIGTRAP = "S05"
 last_SIGVAL = "S00" 
@@ -119,44 +218,8 @@ def handleCommand(socket, command):
                 sendPacket(socket, "Text=000;Data=000;Bss=000")
                 return
             elif "Rcmd" in query:
-                cmd = ' '.join(bytes.fromhex(query.split(',')[1]).decode("ascii").split())
-
-                if cmd == "reset":
-                    dbg.reset()
-                    sendPacket(socket, "OK")
-                    return
-                elif cmd == "halt":
-                    dbg.stop()
-                    sendPacket(socket, "OK")
-                    return
-                elif cmd == "reset halt":
-                    dbg.reset_and_halt()
-                    sendPacket(socket, "OK")
-                    return
-                elif cmd == "status":
-                    string, _ = dbg.monitor_status()
-                    sendPacket(socket, string.encode("ascii").hex())
-                    return
-                elif cmd == "breakpoints":
-                    string = dbg.monitor_breakpoints()
-                    sendPacket(socket, string.encode("ascii").hex())
-                    return
-                elif cmd == "capture":
-                    # Loading firmware with binary write is not supported instead this command would initialize the firmware image.
-                    dbg.begin_image()
-                    sendPacket(socket, "Ready to receive firmware.\n".encode("ascii").hex())
-                    return
-                elif cmd == "flash":
-                    if dbg.download_image():
-                        sendPacket(socket, "Done downloading image into target.\n".encode("ascii").hex())
-                    else:
-                        sendPacket(socket, "Error while trying to download image into target.\n".encode("ascii").hex())
-                    return
-                elif cmd == "help":
-                    sendPacket(socket, help_msg.encode("ascii").hex())
-                    return
-                
-                sendPacket(socket, "E01")
+                cmd = bytes.fromhex(query.split(',')[1]).decode("ascii")
+                sendPacket(socket, monitor.execute(cmd))
             elif "Xfer:features:read" in query:
                 xml = ""
                 with open(device_xml, 'r') as f: # prvx32_target.xml
@@ -397,6 +460,7 @@ if __name__ == "__main__":
                                 silent=silent)
     dbg.stop()
     dbg.breakpointHWClear()
+    monitor = MonitorParser(dbg)
 
     rsp = RSPParser()
 
