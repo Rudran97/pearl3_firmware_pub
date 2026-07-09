@@ -82,15 +82,18 @@ The Pearl3 platform also supports debugging through the GNU Debugger (GDB).
 
 This functionality is provided by a custom [GDB server](Utility/debugger/server.py), which bridges communication between GDB and the Pearl3 debug module. The server listens on port `3333` and can be accessed using any GDB client that supports the Remote Serial Protocol (RSP).
 
-In addition to the `gdb server`, the [debug bridge](Utility/debugger/debugBridge.py) provides a higher-level interface built on top of the `debug port`. It combines existing debug commands with supporting utility tools to perform more complex operations, such as resetting the microcontroller.
+In addition to the `gdb server`, the [debug bridge](Utility/debugger/debugBridge.py) provides a higher-level interface built on top of the `debug port`. It combines existing debug commands with supporting utility tools to perform more complex operations, such as resetting and programming the microcontroller.
 
 The server currently supports the following packet types:
 
 | Packet | Description                 |
 | :---   | :---                        |
 | `g`    | Read all registers.         |
+| `G`    | Write all registers.        |
 | `p`    | Read a single register.     |
+| `P`    | Write a single register.    |
 | `m`    | Read memory.                |
+| `M`    | Write memory.               |
 | `c`    | Continue execution.         |
 | `s`    | Single-step execution.      |
 | `z`    | Remove hardware breakpoint. |
@@ -98,8 +101,7 @@ The server currently supports the following packet types:
 | `q`    | Essential query packets.    |
 
 **Note**
-The current implementation supports read-only debugging. Register writes, memory writes, and software breakpoints are not supported.
-The standard GDB breakpoint commands (`Z0` and `z0`) are mapped to the two hardware trigger modules implemented in the Pearl3 microcontroller.
+The current implementation does not support software breakpoints. The standard GDB breakpoint commands (`Z0` and `z0`) are mapped to the two hardware trigger modules implemented in the Pearl3 microcontroller.
 
 ### GDB Monitor Commands
 
@@ -111,6 +113,9 @@ monitor help
 ```
 
 to display the list of supported monitor commands.
+
+**Note**
+When trying to load a firmware image into the target, the GDB `load` command should not be used directly. Instead, the user must execute the `monitor capture` command first and should immediately follow it with the GDB `load` command. The image in this case would be stored in the host memory i.e. does not program the target memory yet. The firmware image stored in memory can then be loaded anytime into the target by executing the `monitor flash` command. This is done to prevent GDB timeouts due to slow programming speed of the debug trasport layer, associated with the target, when executing the `load` command directly.
 
 ---
 
