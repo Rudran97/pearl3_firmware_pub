@@ -39,7 +39,7 @@ ASFLAGS += -D $(DEVICE_ID)
 # C compilation directives
 CFLAGS += -c
 CFLAGS += -Wall
-CFLAGS += -O2
+CFLAGS += -O0
 CFLAGS += -g3 -ggdb
 CFLAGS += -fmessage-length=0
 CFLAGS += --specs=nosys.specs
@@ -135,7 +135,7 @@ $(OBJDIR)/main.elf: $(ALLOBJS)
 
 # Rule to create a raw binary file from an ELF file.
 $(OBJDIR)/main.bin: $(OBJDIR)/main.elf
-	$(OC) -S -O binary $< $@
+	# $(OC) -S -O binary $< $@
 	$(OC) -S -O ihex $< $(OBJDIR)/main.hex
 	$(OS) $<
 	@$(OD) -D $< > $(OBJDIR)/main.lst
@@ -159,7 +159,7 @@ prv-debug:
 # Rule to launch server for gdb based debugging
 .PHONY: prv-gdbserver
 prv-gdbserver:
-	$(PY) $(UTILITY_PATH)/debugger/server.py --device $(DEVICE_ID) --xml $(UTILITY_PATH)/debugger/prvx32_target.xml
+	$(PY) $(UTILITY_PATH)/debugger/server.py --device $(DEVICE_ID) --xml $(UTILITY_PATH)/debugger/prvx32_target.xml --silent-info
 
 # Rule to soft reset 
 .PHONY: reset

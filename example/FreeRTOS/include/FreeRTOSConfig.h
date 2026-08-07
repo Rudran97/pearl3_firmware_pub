@@ -63,7 +63,7 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION    0
 #define configUSE_TICKLESS_IDLE                    0
 #define configMAX_PRIORITIES                       5
-#define configMINIMAL_STACK_SIZE                   128
+#define configMINIMAL_STACK_SIZE                   150
 #define configISR_STACK_SIZE_WORDS                 (300)
 #define configMAX_TASK_NAME_LEN                    16
 #define configTICK_TYPE_WIDTH_IN_BITS              TICK_TYPE_WIDTH_64_BITS
@@ -106,7 +106,7 @@
 #define configSUPPORT_STATIC_ALLOCATION              0
 #define configKERNEL_PROVIDED_STATIC_MEMORY          0
 #define configSUPPORT_DYNAMIC_ALLOCATION             1
-#define configTOTAL_HEAP_SIZE                        4096
+#define configTOTAL_HEAP_SIZE                        10*(1024)
 #define configAPPLICATION_ALLOCATED_HEAP             0
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP    0
 #define configENABLE_HEAP_PROTECTOR                  0
@@ -141,7 +141,7 @@
  * configCHECK_FOR_STACK_OVERFLOW is set to 1. See
  * https://www.freertos.org/Stacks-and-stack-overflow-checking.html  Defaults to
  * 0 if left undefined. */
-#define configCHECK_FOR_STACK_OVERFLOW        0
+#define configCHECK_FOR_STACK_OVERFLOW        2
 
 /******************************************************************************/
 /* Run time and task stats gathering related definitions. *********************/

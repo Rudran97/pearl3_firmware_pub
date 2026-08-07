@@ -142,7 +142,7 @@ $(OBJDIR)/main.elf: $(ALLOBJS)
 
 # Rule to create a raw binary file from an ELF file.
 $(OBJDIR)/main.bin: $(OBJDIR)/main.elf
-	$(OC) -S -O binary $< $@
+	# $(OC) -S -O binary $< $@
 	$(OC) -S -O ihex $< $(OBJDIR)/main.hex
 	$(OS) $<
 	@$(OD) -D $< > $(OBJDIR)/main.lst
