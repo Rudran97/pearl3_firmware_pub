@@ -38,6 +38,10 @@ SECTIONS
   .text :
   {
     *(.text .text.*)
+    . = ALIGN(4);
+    /* Always add a nop instruction at the end for alignment
+     * as the programmer expects 32-bit data size. */
+    LONG(0x00000013)
   } >FLASH
   . = ALIGN(4);
 
