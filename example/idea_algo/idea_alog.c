@@ -6,13 +6,14 @@
 #include "idea.h"
 
 uint8_t text[] = {0x11, 0x11, 0x22, 0x22, 0x44, 0x44, 0x88, 0x88};
-const char *message = "Hello123";
+const char *message = "Hello World!!!";
 
 // uint8_t key[] = {0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00, 0x06, 0x00, 0x07, 0x00, 0x08};
 uint8_t key[] = {0x5a, 0x14, 0xfb, 0x3e, 0x02, 0x1c, 0x79, 0xe0, 0x60, 0x81, 0x46, 0xa0, 0x11, 0x7b, 0xff, 0x03};
 uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
 
 uint8_t cipher[128] = {0};
+uint8_t decipher[128] = {0};
 uint16_t iv_used[4] = {0};
 
 int main ()
@@ -32,8 +33,9 @@ int main ()
         .key = key,
         .keyLen = sizeof(key) / sizeof(key[0]),
         .plainText = (uint8_t *)message,
-        .plainTextLen = strlen(message),
+        .textLen = strlen(message),
         .cipherText = cipher,
+        .decryptText = decipher,
         .IV_type = IDEA_IV_ZERO,
         .IV = iv
     };
@@ -46,6 +48,12 @@ int main ()
 
     uint32_t cipher_len = IDEA_GetCipherTextLength(&idea_config);
     IDEA_STATUS_t status = IDEA_GetIV(&idea_config, iv_used);
+
+    idea_config.textLen = cipher_len;
+    if (IDEA_DecryptText(&idea_config) != IDEA_STATUS_SUCCESS)
+        while(1);
+
+    uint32_t decrypt_len = IDEA_GetCipherTextLength(&idea_config);
 
     if (idea_SelfTest() != IDEA_STATUS_SUCCESS)
         while(1);

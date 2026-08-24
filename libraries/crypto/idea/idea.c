@@ -13,20 +13,27 @@
 
 typedef struct
 {
-    uint16_t textBlock[4];
-    uint16_t encryptBlock[4];
+    uint16_t inputBlock[4];
+    uint16_t outputBlock[4];
     uint16_t iv[4];
     uint16_t encryptPartialKey[52];
     uint16_t decryptPartialKey[52];
 } idea_block_directory_t;
 
+typedef enum
+{
+    IDEA_ENCRYPT,
+    IDEA_DECRYPT
+} idea_cipher_op_t;
+
 idea_block_directory_t idea_block = {0};
 uint32_t cipher_text_len; // cipher text length - returned after encryption
 
+static void idea_cipher(idea_cipher_op_t op);
 static void idea_round(uint16_t *y_out, uint16_t *x_in, uint16_t *z_in);
 static void idea_trafo(uint16_t *y_out, uint16_t *x_in, uint16_t *z_in);
 static void idea_gen_partial_keys(IDEA_CONFIG_t *config);
-static void idea_encrypt_block();
+static uint16_t idea_mul_inv(uint16_t a);
 
 static uint16_t idea_mulop(uint16_t i_1, uint16_t i_2);
 static inline uint16_t idea_addop(uint16_t a_1, uint16_t a_2);
@@ -88,11 +95,12 @@ IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config)
     uint8_t *pt = config->plainText;
     uint8_t *ct = config->cipherText;
 
-    uint32_t len = config->plainTextLen;
+    uint32_t len = config->textLen;
 
     if (len == 0)
         return IDEA_STATUS_INVALID_MESSAGE_LENGTH;
 
+    cipher_text_len = 0;
     uint8_t padding = 8 - (len % 8);
 
     if (padding == 0)
@@ -111,42 +119,42 @@ IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config)
                 block[j] = padding;
         }
 
-        idea_block.textBlock[0] = (block[0] << 8) | block[1];
-        idea_block.textBlock[1] = (block[2] << 8) | block[3];
-        idea_block.textBlock[2] = (block[4] << 8) | block[5];
-        idea_block.textBlock[3] = (block[6] << 8) | block[7];
+        idea_block.inputBlock[0] = (block[0] << 8) | block[1];
+        idea_block.inputBlock[1] = (block[2] << 8) | block[3];
+        idea_block.inputBlock[2] = (block[4] << 8) | block[5];
+        idea_block.inputBlock[3] = (block[6] << 8) | block[7];
 
         // CBC xor
         if (offset == 0)
         {
-            idea_block.textBlock[0] ^= idea_block.iv[0];
-            idea_block.textBlock[1] ^= idea_block.iv[1];
-            idea_block.textBlock[2] ^= idea_block.iv[2];
-            idea_block.textBlock[3] ^= idea_block.iv[3];
+            idea_block.inputBlock[0] ^= idea_block.iv[0];
+            idea_block.inputBlock[1] ^= idea_block.iv[1];
+            idea_block.inputBlock[2] ^= idea_block.iv[2];
+            idea_block.inputBlock[3] ^= idea_block.iv[3];
         }
         else
         {
-            idea_block.textBlock[0] ^= idea_block.encryptBlock[0];
-            idea_block.textBlock[1] ^= idea_block.encryptBlock[1];
-            idea_block.textBlock[2] ^= idea_block.encryptBlock[2];
-            idea_block.textBlock[3] ^= idea_block.encryptBlock[3];
+            idea_block.inputBlock[0] ^= idea_block.outputBlock[0];
+            idea_block.inputBlock[1] ^= idea_block.outputBlock[1];
+            idea_block.inputBlock[2] ^= idea_block.outputBlock[2];
+            idea_block.inputBlock[3] ^= idea_block.outputBlock[3];
         }
 
         // Encrypt
-        idea_encrypt_block();
+        idea_cipher(IDEA_ENCRYPT);
 
         // Store ciphertext
-        ct[offset + 0] = (uint8_t)(idea_block.encryptBlock[0] >> 8);
-        ct[offset + 1] = (uint8_t)(idea_block.encryptBlock[0]);
+        ct[offset + 0] = (uint8_t)(idea_block.outputBlock[0] >> 8);
+        ct[offset + 1] = (uint8_t)(idea_block.outputBlock[0]);
 
-        ct[offset + 2] = (uint8_t)(idea_block.encryptBlock[1] >> 8);
-        ct[offset + 3] = (uint8_t)(idea_block.encryptBlock[1]);
+        ct[offset + 2] = (uint8_t)(idea_block.outputBlock[1] >> 8);
+        ct[offset + 3] = (uint8_t)(idea_block.outputBlock[1]);
 
-        ct[offset + 4] = (uint8_t)(idea_block.encryptBlock[2] >> 8);
-        ct[offset + 5] = (uint8_t)(idea_block.encryptBlock[2]);
+        ct[offset + 4] = (uint8_t)(idea_block.outputBlock[2] >> 8);
+        ct[offset + 5] = (uint8_t)(idea_block.outputBlock[2]);
 
-        ct[offset + 6] = (uint8_t)(idea_block.encryptBlock[3] >> 8);
-        ct[offset + 7] = (uint8_t)(idea_block.encryptBlock[3]);
+        ct[offset + 6] = (uint8_t)(idea_block.outputBlock[3] >> 8);
+        ct[offset + 7] = (uint8_t)(idea_block.outputBlock[3]);
 
         cipher_text_len += 8;
     }
@@ -155,7 +163,86 @@ IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config)
 }
 
 /**
- * @brief API to get the actual length of the cipher text in bytes.
+ * @brief API to decrypt message using IDEA.
+ * 
+ * @param config         Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
+ * @return IDEA_STATUS_t Status of the operation. Refer to enum IDEA_STATUS_t.
+ */
+IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config)
+{
+    if (config == NULL)
+        return IDEA_STATUS_INVALID_PARAMETER;
+
+    if (config->keyLen != 16) // The key must be 128 bits
+        return IDEA_STATUS_INVALID_KEY_LENGTH;
+
+    uint8_t *ct = config->cipherText;
+    uint8_t *dt = config->decryptText;
+
+    uint32_t len = config->textLen;
+
+    if ((len == 0) || (len % 8 != 0))
+        return IDEA_STATUS_INVALID_CIPHER_LENGTH;
+
+    cipher_text_len = 0;
+    uint8_t block[8];
+
+    for (uint32_t offset = 0; offset < len; offset +=8)
+    {
+        // Construct an 8-byte ciphertext block
+        for (uint8_t j = 0; j < 8; j++)
+        {
+            block[j] = ct[offset+j];
+        }
+
+        idea_block.inputBlock[0] = (block[0] << 8) | block[1];
+        idea_block.inputBlock[1] = (block[2] << 8) | block[3];
+        idea_block.inputBlock[2] = (block[4] << 8) | block[5];
+        idea_block.inputBlock[3] = (block[6] << 8) | block[7];
+
+        // Decrypt
+        idea_cipher(IDEA_DECRYPT);
+
+        // CBC xor
+        if (offset == 0)
+        {
+            idea_block.outputBlock[0] ^= idea_block.iv[0];
+            idea_block.outputBlock[1] ^= idea_block.iv[1];
+            idea_block.outputBlock[2] ^= idea_block.iv[2];
+            idea_block.outputBlock[3] ^= idea_block.iv[3];
+        }
+        else
+        {
+            idea_block.outputBlock[0] ^= (ct[offset-8+0] << 8) | ct[offset-8+1];
+            idea_block.outputBlock[1] ^= (ct[offset-8+2] << 8) | ct[offset-8+3];
+            idea_block.outputBlock[2] ^= (ct[offset-8+4] << 8) | ct[offset-8+5];
+            idea_block.outputBlock[3] ^= (ct[offset-8+6] << 8) | ct[offset-8+7];
+        }
+
+        // Store plaintext
+        dt[offset + 0] = (uint8_t)(idea_block.outputBlock[0] >> 8);
+        dt[offset + 1] = (uint8_t)(idea_block.outputBlock[0]);
+
+        dt[offset + 2] = (uint8_t)(idea_block.outputBlock[1] >> 8);
+        dt[offset + 3] = (uint8_t)(idea_block.outputBlock[1]);
+
+        dt[offset + 4] = (uint8_t)(idea_block.outputBlock[2] >> 8);
+        dt[offset + 5] = (uint8_t)(idea_block.outputBlock[2]);
+
+        dt[offset + 6] = (uint8_t)(idea_block.outputBlock[3] >> 8);
+        dt[offset + 7] = (uint8_t)(idea_block.outputBlock[3]);
+
+        cipher_text_len += 8;
+    }
+
+    // Remove padding bytes from the text length
+    cipher_text_len -= dt[cipher_text_len-1];
+
+    return IDEA_STATUS_SUCCESS;
+}
+
+/**
+ * @brief API to get the actual length of the cipher text in bytes after encrypt/decrypt operation.
  * 
  * @param config    Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
  * @return uint32_t Number of bytes.
@@ -193,11 +280,11 @@ IDEA_STATUS_t IDEA_GetIV(IDEA_CONFIG_t *config, uint16_t *dest)
 
 /* IDEA operation functions */
 
-static void idea_encrypt_block()
+static void idea_cipher(idea_cipher_op_t op)
 {
-    uint16_t *y = idea_block.encryptBlock;
-    uint16_t *x = idea_block.textBlock;
-    uint16_t *z = idea_block.encryptPartialKey;
+    uint16_t *y = idea_block.outputBlock;
+    uint16_t *x = idea_block.inputBlock;
+    uint16_t *z = op == IDEA_ENCRYPT ? idea_block.encryptPartialKey : idea_block.decryptPartialKey;
 
     // Rounds
     for (uint16_t i = 0; i < 8; i++)
@@ -285,6 +372,7 @@ static void idea_gen_partial_keys(IDEA_CONFIG_t *config)
 {
     uint8_t *k = config->key;
     uint16_t *ek = idea_block.encryptPartialKey;
+    uint16_t *dk = idea_block.decryptPartialKey;
 
     // All keys are stored in big-endian order
     // Copy the key into the partial key buffer in 16 bit format
@@ -304,6 +392,86 @@ static void idea_gen_partial_keys(IDEA_CONFIG_t *config)
         else
            ek[i] = (uint16_t)((ek[i-7] << 9) | (ek[i-6] >> 7));
     }
+
+    // Generate decryption subkeys
+    for(uint8_t i = 0; i < 52; i += 6)
+    {
+        /*
+         * Round 1:
+         *     DK1  ~ EK49  Multiplicative Inverse
+         *     DK2  ~ EK50  Additive Inverse
+         *     DK3  ~ EK51  Additive Inverse
+         *     DK4  ~ EK52  Multiplicative Inverse
+         *     DK5  ~ EK47  Direct Match
+         *     DK6  ~ EK48  Direct Match
+         *
+         * Round 2:
+         *     DK8  ~ EK43  Multiplicative Inverse
+         *     DK9  ~ EK45  Additive Inverse (swapped)
+         *     DK10 ~ EK44  Additive Inverse (swapped)
+         *     DK11 ~ EK46  Multiplicative Inverse
+         *     DK12 ~ EK41  Direct Match
+         *     DK13 ~ EK42  Direct Match
+         * .
+         * .
+         * .
+         *
+         * Round 9:
+         *     DK49  ~ EK1  Multiplicative Inverse
+         *     DK50  ~ EK2  Additive Inverse
+         *     DK51  ~ EK3  Additive Inverse
+         *     DK52  ~ EK4  Multiplicative Inverse
+         *
+         * */
+
+        dk[i] = idea_mul_inv(ek[48 - i]); // Multiplicative inverse
+
+        if(i == 0 || i == 48)
+        {
+            dk[i + 1] = -ek[49 - i]; // Additive inverse
+            dk[i + 2] = -ek[50 - i]; // Additive inverse
+        }
+        else
+        {
+           dk[i + 1] = -ek[50 - i]; // Additive inverse (swapped)
+           dk[i + 2] = -ek[49 - i]; // Additive inverse (swapped)
+        }
+
+        dk[i + 3] = idea_mul_inv(ek[51 - i]); // Multiplicative inverse
+
+        if(i < 48)
+        {
+           dk[i + 4] = ek[46 - i]; // Direct Match
+           dk[i + 5] = ek[47 - i]; // Direct Match
+        }
+    }
+
+}
+
+static uint16_t idea_mul_inv(uint16_t a)
+{
+    uint32_t b = 0x10001; // 65537
+
+    int32_t u = 0; // Coefficient of current b
+    int32_t v = 1; // Coefficient of current a
+
+    while (a > 0)
+    {
+        uint32_t q = b / (uint32_t) a;
+        uint32_t r = b % a;
+
+        b = (uint32_t) a;
+        a = (uint32_t) r;
+
+        int32_t t = v;
+        v = u - v * q;
+        u = t;
+    }
+
+    if (u < 0)
+        u += 0x10001;
+
+    return (uint16_t) u;
 }
 
 /*************************************************************/

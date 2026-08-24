@@ -13,7 +13,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 
 /* Use Low-High Algorith to compute the modulo-multiplication */
 // #define IDEA_FAST_MULOP
@@ -28,7 +27,8 @@ typedef enum
     IDEA_STATUS_FAIL,
     IDEA_STATUS_INVALID_KEY_LENGTH,
     IDEA_STATUS_INVALID_PARAMETER,
-    IDEA_STATUS_INVALID_MESSAGE_LENGTH
+    IDEA_STATUS_INVALID_MESSAGE_LENGTH,
+    IDEA_STATUS_INVALID_CIPHER_LENGTH
 } IDEA_STATUS_t;
 
 /* Defines IV type */
@@ -41,14 +41,27 @@ typedef enum
 
 /*************************************************************/
 
-/* Structure defining the configurations of IDEA */
+/**
+ * Structure defining the configurations of IDEA -
+ *
+ * uint8_t *key          Pointer to IDEA key.
+ * uint8_t keyLen        Length of the key, must be 128 bits.
+ * uint8_t *plainText    Pointer to the data to be encrypted.
+ * uint32_t textLen      Length in bytes of the data to be encrypted/decrypted.
+ * uint8_t *cipherText   (Source) Pointer to the data to be decrypted when IDEA_DecryptText is called.
+ *                       (Destination) Location to store the encrypted data when IDEA_EncryptText is called.
+ * uint8_t *decryptText  Location to store the decrypted data.
+ * IDEA_IV_t IV_type     Initialization Vector selection. Use IDEA_IV_t to select IV type.
+ * uint8_t *IV           Pointer to the Initialization Vector (must be 8 bytes) if IDEA_IV_USER_DEFINED is used.
+ */
 typedef struct
 {
     uint8_t *key;
     uint8_t keyLen;
     uint8_t *plainText;
-    uint32_t plainTextLen;
+    uint32_t textLen;
     uint8_t *cipherText;
+    uint8_t *decryptText;
     IDEA_IV_t IV_type;
     uint8_t *IV;
 } IDEA_CONFIG_t;
@@ -72,7 +85,15 @@ IDEA_STATUS_t IDEA_Initialize(IDEA_CONFIG_t *config);
 IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config);
 
 /**
- * @brief API to get the actual length of the cipher text in bytes.
+ * @brief API to decrypt message using IDEA.
+ * 
+ * @param config         Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
+ * @return IDEA_STATUS_t Status of the operation. Refer to enum IDEA_STATUS_t.
+ */
+IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config);
+
+/**
+ * @brief API to get the actual length of the cipher text in bytes after encrypt/decrypt operation.
  * 
  * @param config    Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
  * @return uint32_t Number of bytes.
@@ -94,6 +115,8 @@ IDEA_STATUS_t IDEA_GetIV(IDEA_CONFIG_t *config, uint16_t *dest);
  * https://sources.debian.org/src/thunderbird/1%3A140.12.0esr-1~deb12u1/comm/third_party/libgcrypt/cipher/idea.c?utm_source=chatgpt.com */
 
 #ifdef IDEA_TEST_VECTOR
+#include <string.h>
+
     static struct {
         uint8_t key[16];
         uint8_t plain[8];
@@ -170,27 +193,39 @@ IDEA_STATUS_t IDEA_GetIV(IDEA_CONFIG_t *config, uint16_t *dest);
             uint8_t *test_ct = idea_test_vectors[i].cipher;
 
             uint8_t ct[32] = {0};
+            uint8_t dt[32] = {0};
 
             IDEA_CONFIG_t idea_self_test_config = {
                 .key = test_key,
                 .keyLen = key_len,
                 .plainText = test_pt,
-                .plainTextLen = pt_len,
+                .textLen = pt_len,
                 .cipherText = ct,
+                .decryptText = dt,
                 .IV_type = IDEA_IV_ZERO
             };
 
+            // Setup
             if (IDEA_Initialize(&idea_self_test_config) != IDEA_STATUS_SUCCESS)
                 return IDEA_STATUS_FAIL;
 
+            // Encrypt
             if (IDEA_EncryptText(&idea_self_test_config) != IDEA_STATUS_SUCCESS)
                 return IDEA_STATUS_FAIL;
 
-            uint32_t cipher_len = IDEA_GetCipherTextLength(&idea_self_test_config);
-            if (cipher_len != 16)  // 8 extra bytes due to padding
+            uint32_t ct_len = IDEA_GetCipherTextLength(&idea_self_test_config);
+            if (ct_len != 16)  // 8 extra bytes due to padding
                 return IDEA_STATUS_FAIL;
 
             if (memcmp(ct, test_ct, 8))
+                return IDEA_STATUS_FAIL;
+
+            // Decrypt
+            idea_self_test_config.textLen = ct_len; // For decryption, the textLen becomes the cipher text length
+            if (IDEA_DecryptText(&idea_self_test_config) != IDEA_STATUS_SUCCESS)
+                return IDEA_STATUS_FAIL;
+
+            if (memcmp(dt, test_pt, 8))
                 return IDEA_STATUS_FAIL;
         }
 
