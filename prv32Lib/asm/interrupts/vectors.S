@@ -174,27 +174,31 @@ sync_exceptions:
     /* Output the EXC code on on-board LEDs */
 
 handle_illegal_insn:
-    li      a0,   EXC_ILL_INSN
     la      a5,   __latd
+    lw      a0,   0(a5)
+    ori     a0,   a0, EXC_ILL_INSN
     sw      a0,   0(a5)
 	j       end_handler_incr_mepc
 
 handle_ecall:
-    li      a0,   EXC_ECALL
     la      a5,   __latd
+    lw      a0,   0(a5)
+    ori     a0,   a0, EXC_ECALL
     sw      a0,   0(a5)
 	j       end_handler_incr_mepc
 
 handle_ebreak:
-    li      a0,   EXC_BREAK
     la      a5,   __latd
+    lw      a0,   0(a5)
+    ori     a0,   a0, EXC_BREAK
     sw      a0,   0(a5)
 	j       end_handler_incr_mepc
 
 
 handle_unknown:
-    li      a0,   EXC_UNKWN
     la      a5,   __latd
+    lw      a0,   0(a5)
+    ori     a0,   a0, EXC_UNKWN
     sw      a0,   0(a5)
 	j       end_handler_ret
 
