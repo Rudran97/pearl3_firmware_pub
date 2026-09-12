@@ -10,7 +10,7 @@ import Loader
 
 
 class DebugBridge(dbg.DeviceStatus):
-    def __init__(self, device_id, comm_port, speed, dtot, read_timeout, silent="none"):
+    def __init__(self, device_id, comm_port, speed, dtot, read_timeout, silent="none", ebreakm=False):
         self.dbg = dbg.Debugger(device_id=device_id, comm_port=comm_port, speed=speed, read_timeout=read_timeout, test_mode=False, silent=silent)
 
         self.loader = ImageLoader()
@@ -28,7 +28,18 @@ class DebugBridge(dbg.DeviceStatus):
         elif silent == "all":
             self.silent_log = ["info", "error"]
 
-        self.breakpoints = {0: None, 1: None}
+        self.ebreakm = ebreakm
+
+        self.breakpoints = {
+            0: None,
+            1: None,
+            2: None,
+            3: None,
+            4: None,
+            5: None,
+            6: None,
+            7: None,
+        }
 
         self.csr_addr = {
             # 32: "0x7B1", # pc = dpc
@@ -81,14 +92,17 @@ class DebugBridge(dbg.DeviceStatus):
 
         return self.dbg.device_status == self.STOPPED
 
+    def ebreakDebug(self, state: bool):
+        self.ebreakm = state
+
     def step(self):
         self.ensure_debug_mode("step")
-        self.dbg.Step()
+        self.dbg.Step(self.ebreakm)
         return self.dbg.device_status
 
     def run(self):
         if self.dbg.device_status == self.STOPPED:
-            self.dbg.Continue()
+            self.dbg.Continue(self.ebreakm)
         return self.dbg.device_status
 
     def stop(self, prg_halt=False):
@@ -102,13 +116,8 @@ class DebugBridge(dbg.DeviceStatus):
         self.ensure_debug_mode("breakpoints set")
 
         for b, a in self.breakpoints.items():
-            if a is None:
+            if a is None and self.dbg.Trig_set(addr_hex, b) is not None:
                 # If bpt was not set earlier i.e. it is None, then set the breakpoint
-                if b == 1:
-                    self.dbg.Trig1_set(addr_hex)
-                else:
-                    self.dbg.Trig0_set(addr_hex)
-
                 self.breakpoints[b] = addr
                 return "OK"
 
@@ -118,19 +127,15 @@ class DebugBridge(dbg.DeviceStatus):
         self.ensure_debug_mode("breakpoints clear")
 
         if address is None:
-            self.dbg.Trig0_remove()
-            self.dbg.Trig1_remove()
+            # If no address provided then remove all breakpoints
+            for bp in range(8):
+                self.dbg.Trig_remove(bp)
 
             return "OK"
         else:
             for b, a in self.breakpoints.items():
-                if a == address:
+                if a == address and self.dbg.Trig_remove(b) is not None:
                     # Only remove breakpoints if the address exists in the table
-                    if b == 1:
-                        self.dbg.Trig1_remove()
-                    else:
-                        self.dbg.Trig0_remove()
-
                     self.breakpoints[b] = None
                     return "OK"
 
@@ -526,8 +531,8 @@ class DebugBridge(dbg.DeviceStatus):
     def memory_region(self):
         string = f"Device ID {self.device_id.upper()}\n"
         string += f"RAM\n{self.ram_start} - {hex(int(self.ram_start, 16) + self.ram_size_word * 4 - 1)}  size {self.ram_size_word * 4} bytes\n"
-        string += f"CLIC\n{self.clic_start} - {hex(int(self.clic_start, 16) + self.clic_size_word * 4 - 1)}  size {self.clic_size_word * 4} bytes\n"
         string += f"IO\n{self.io_start} - {hex(int(self.io_start, 16) + self.io_size_word * 4 - 1)}  size {self.io_size_word * 4} bytes\n"
+        string += f"CLIC\n{self.clic_start} - {hex(int(self.clic_start, 16) + self.clic_size_word * 4 - 1)}  size {self.clic_size_word * 4} bytes\n"
         string += f"ROM\n{self.rom_start} - {hex(int(self.rom_start, 16) + self.rom_size_word * 4 - 1)}  size {self.rom_size_word * 4} bytes\n"
 
         return string
@@ -609,4 +614,3 @@ class FirmwareSection:
         if size != len(data) // 2:
             print(f"[ERROR] While loading Firmware Image - size {size} does not match with the size of data {len(data) // 2}")
             self.valid = False
-

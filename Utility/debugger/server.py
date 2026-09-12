@@ -8,6 +8,7 @@ import select
 import argparse
 import time
 
+
 class RSPParser:
     def __init__(self):
         self.buffer = ""
@@ -55,9 +56,10 @@ class RSPParser:
             packets.append((payload, checksum))
 
             # Remove processed packet
-            self.buffer = self.buffer[hash_pos + 3:]
+            self.buffer = self.buffer[hash_pos + 3 :]
 
         return packets
+
 
 class MonitorParser:
     HELP_MSG = """
@@ -69,21 +71,22 @@ class MonitorParser:
                  [image]             - Information about the firmware image stored in memory.
                  [memory]            - Target memory regions.
             capture                  - Prepare to receive a firmware image from the next GDB 'load' command.
+            ebreakm 0:1              - Enter debug mode on ebreak instruction.
             flash [rom:ram]          - Flash the firmware image stored in memory into target [only rom or ram section].
             erase image              - Erase firmware image stored in memory.
                   target [rom:ram]   - Erase all sections of the target [only rom or ram section of the target].
             help                     - Display this.
 """
-    
+
     def __init__(self, debugger):
         self.dbg = debugger
-    
+
     @staticmethod
     def rsp_string(string: str):
-        return string.encode("ascii").hex() 
+        return string.encode("ascii").hex()
 
-    def execute(self, command : str = ""):
-        cmd = ' '.join(command.split()).split() # remove extra spaces and trailings spaces, after that split it into sub commands
+    def execute(self, command: str = ""):
+        cmd = " ".join(command.split()).split()  # remove extra spaces and trailings spaces, after that split it into sub commands
 
         if len(cmd) > 0:
             if cmd[0] == "reset":
@@ -102,7 +105,7 @@ class MonitorParser:
                 self.dbg.stop()
                 return "OK"
             elif cmd[0] == "info":
-                if  len(cmd) == 1:
+                if len(cmd) == 1:
                     string, _ = self.dbg.monitor_status()
                     return string.encode("ascii").hex()
                 elif len(cmd) == 2:
@@ -124,21 +127,36 @@ class MonitorParser:
                 # Loading firmware with binary write is not supported instead this command would initialize the firmware image.
                 self.dbg.begin_image()
                 return self.rsp_string("Ready to receive firmware.\n")
+            elif cmd[0] == "ebreakm":
+                if len(cmd) == 2:
+                    if cmd[1] in ["0", "1"]:
+                        self.dbg.ebreakDebug(cmd[1] == "1")
+                        return "OK"
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+                else:
+                    return self.rsp_string(f"Command '{cmd[0]}' takes one parameter 0/1.\n")
             elif cmd[0] == "flash":
                 if len(cmd) > 2:
                     return self.rsp_string(f"Command '{cmd[0]}' takes only one optional parameter.\n")
                 if len(cmd) > 1:
                     if cmd[1] == "rom":
-                        if self.dbg.download_image("rom"): return self.rsp_string("Done downloading rom image into target.\n")
-                        else: return self.rsp_string("Error while trying to rom download image into target.\n")
+                        if self.dbg.download_image("rom"):
+                            return self.rsp_string("Done downloading rom image into target.\n")
+                        else:
+                            return self.rsp_string("Error while trying to rom download image into target.\n")
                     elif cmd[1] == "ram":
-                        if self.dbg.download_image("ram"): return self.rsp_string("Done downloading ram image into target.\n")
-                        else: return self.rsp_string("Error while trying to ram download image into target.\n")
+                        if self.dbg.download_image("ram"):
+                            return self.rsp_string("Done downloading ram image into target.\n")
+                        else:
+                            return self.rsp_string("Error while trying to ram download image into target.\n")
                     else:
                         return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
                 else:
-                    if self.dbg.download_image("all"): return self.rsp_string("Done downloading image into target.\n")
-                    else: return self.rsp_string("Error while trying to download image into target.\n")
+                    if self.dbg.download_image("all"):
+                        return self.rsp_string("Done downloading image into target.\n")
+                    else:
+                        return self.rsp_string("Error while trying to download image into target.\n")
             elif cmd[0] == "erase":
                 if len(cmd) == 3:
                     # 3 parameters passed
@@ -169,27 +187,32 @@ class MonitorParser:
         return self.rsp_string(self.HELP_MSG)
 
 
-HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
-PORT = 3333         # Port to listen on (non-privileged ports are > 1023)
+HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
+PORT = 3333  # Port to listen on (non-privileged ports are > 1023)
 
 lastPacket = ""
 
 SIGTRAP = "S05"
-last_SIGVAL = "S00" 
+last_SIGVAL = "S00"
+
 
 def signal_handler(sig, frame):
-    print('You pressed Ctrl-C!')
+    print("You pressed Ctrl-C!")
     dbg.cleanup()
     sys.exit(0)
+
+
 signal.signal(signal.SIGINT, signal_handler)
+
 
 def sendPacket(socket, packetData):
     lastPacket = packetData
     checksum = sum(packetData.encode("ascii")) % 256
-    message = "$" + packetData + "#" + format(checksum, '02x')
+    message = "$" + packetData + "#" + format(checksum, "02x")
     if packetData == "":
         message = "$#00"
     socket.sendall(message.encode("ascii"))
+
 
 def handleCommand(socket, command):
     # Required support g, m, c, q, p, z, and s
@@ -218,11 +241,11 @@ def handleCommand(socket, command):
                 sendPacket(socket, "Text=000;Data=000;Bss=000")
                 return
             elif "Rcmd" in query:
-                cmd = bytes.fromhex(query.split(',')[1]).decode("ascii")
+                cmd = bytes.fromhex(query.split(",")[1]).decode("ascii")
                 sendPacket(socket, monitor.execute(cmd))
             elif "Xfer:features:read" in query:
                 xml = ""
-                with open(device_xml, 'r') as f: # prvx32_target.xml
+                with open(device_xml, "r") as f:  # prvx32_target.xml
                     xml = f.read()
                 sendPacket(socket, "l" + xml)
                 return
@@ -236,7 +259,7 @@ def handleCommand(socket, command):
     elif "c" == command[0]:
         if len(command) > 1:
             addr = command[1:]
-        
+
         status = dbg.run()
 
         if status == dbg.STOPPED:
@@ -249,7 +272,7 @@ def handleCommand(socket, command):
 
         if breakpointType in ["0", "1"]:
             # HW breakpoint
-            resp = dbg.breakpointHWClear(int(addr,16))
+            resp = dbg.breakpointHWClear(int(addr, 16))
             sendPacket(socket, resp)
         else:
             # Not Supported
@@ -269,7 +292,7 @@ def handleCommand(socket, command):
         addrSize = command[1:]
         addr = addrSize.split(",")[0]
         size = addrSize.split(",")[1]
-        
+
         data = bytearray()
         data = dbg.readMem(int(addr, 16), int(size, 16))
 
@@ -278,7 +301,7 @@ def handleCommand(socket, command):
         else:
             dataString = ""
             for byte in data:
-                dataString = dataString + format(byte, '02x')
+                dataString = dataString + format(byte, "02x")
 
             sendPacket(socket, dataString)
     elif "M" == command[0]:
@@ -310,25 +333,25 @@ def handleCommand(socket, command):
 
         regString = ""
         for reg in regs:
-            regString = regString + format(reg, '02x')
+            regString = regString + format(reg, "02x")
         pcString = ""
         for reg in pc:
-            pcString = pcString + format(reg, '02x')
+            pcString = pcString + format(reg, "02x")
         csrString = ""
         for reg in csrs:
-            csrString = csrString + format(reg, '02x')
+            csrString = csrString + format(reg, "02x")
 
         sendPacket(socket, regString + pcString + csrString)
     elif "G" == command[0]:
         data = command[1:]
         success = True
 
-        if len(data) !=  54 * 8:
+        if len(data) != 54 * 8:
             sendPacket(socket, "E01")
             return
 
         for r in range(0, 54):
-            if not dbg.writeRegister(r, data[8*r:8*r+8]):
+            if not dbg.writeRegister(r, data[8 * r : 8 * r + 8]):
                 success = False
                 break
 
@@ -342,30 +365,30 @@ def handleCommand(socket, command):
             idx = int(command[1:], 0)
             if idx < 32:
                 # Core registers x0 - x31
-                reg = dbg.readRegs()[4*idx:4*idx+4] # Extract the specific register from the set
+                reg = dbg.readRegs()[4 * idx : 4 * idx + 4]  # Extract the specific register from the set
                 reg.reverse()
                 regString = ""
                 for b in reg:
-                    regString = regString + format(b, '02x')
+                    regString = regString + format(b, "02x")
                 sendPacket(socket, regString)
             elif 32 < idx < 54:
                 # CSRs
-                csr = dbg.readCSRs()[4*(idx - 33):4*(idx - 33)+4] # Extract the specific CSR from the set
+                csr = dbg.readCSRs()[4 * (idx - 33) : 4 * (idx - 33) + 4]  # Extract the specific CSR from the set
                 csr.reverse()
                 csrString = ""
                 for b in csr:
-                    csrString = csrString + format(b, '02x')
+                    csrString = csrString + format(b, "02x")
                 sendPacket(socket, csrString)
             elif command[1:] == "32":
                 pc = dbg.readPC()
                 pc.reverse()
                 pcString = ""
                 for b in pc:
-                    pcString = pcString + format(b, '02x')
+                    pcString = pcString + format(b, "02x")
                 sendPacket(socket, pcString)
     elif "P" == command[0]:
         """ P command received: 20=0df0adca """
-        regnoData = command[1:] 
+        regnoData = command[1:]
         regno = regnoData.split("=")[0]
         data = regnoData.split("=")[1]
 
@@ -376,8 +399,10 @@ def handleCommand(socket, command):
     else:
         sendPacket(socket, "")
 
+
 def readRegs(n):
-    return "0"*2*n
+    return "0" * 2 * n
+
 
 def handleData(socket, data):
     if data == b"\x03":
@@ -392,7 +417,7 @@ def handleData(socket, data):
 
     for payload, checksum in packets:
         # Verify checksum
-        calc = sum(payload.encode("ascii")) & 0xff
+        calc = sum(payload.encode("ascii")) & 0xFF
 
         try:
             recv = int(checksum, 16)
@@ -410,17 +435,19 @@ def handleData(socket, data):
         # Execute command
         handleCommand(socket, payload)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pearl gdb-server:")
 
     # Arguments
-    parser.add_argument('--device', help="Device ID", type=str, default="prvx3imc48sh")
-    parser.add_argument('-p', '--port', help="Serial port to debugger", type=str, default="/dev/cu.usbserial-0078EE22")
-    parser.add_argument('-s', '--speed', help="Serial communication speed", type=int, default=115200)
-    parser.add_argument('--dtot', help="Debug timeout timer in seconds (must be in integer and value >= 1)", type=int, default=3)
-    parser.add_argument('--xml', help="Device xml file containing information of registers", type=str)
-    parser.add_argument('--silent-all', help="Silent all terminal outputs", action='store_true')
-    parser.add_argument('--silent-info', help="Silent only info terminal outputs", action='store_true')
+    parser.add_argument("--device", help="Device ID", type=str, default="prvx3imc48sh")
+    parser.add_argument("-p", "--port", help="Serial port to debugger", type=str, default="/dev/cu.usbserial-0078EE22")
+    parser.add_argument("-s", "--speed", help="Serial communication speed", type=int, default=115200)
+    parser.add_argument("--dtot", help="Debug timeout timer in seconds (must be in integer and value >= 1)", type=int, default=3)
+    parser.add_argument("--xml", help="Device xml file containing information of registers", type=str)
+    parser.add_argument("--silent-all", help="Silent all terminal outputs", action="store_true")
+    parser.add_argument("--silent-info", help="Silent only info terminal outputs", action="store_true")
+    parser.add_argument("--no-ebreakm", help="Enter exception handler on ebreak instruction", action="store_true")
 
     args = parser.parse_args()
 
@@ -443,7 +470,7 @@ if __name__ == "__main__":
         exit()
     else:
         ## e.g. "1387f9ff" -> 5000 * 1 ms : "f9ff" represents the prescale value that sets the timer to 1 ms. 5000 - 1 = 1387 in hex
-        dtot_to_hex = "0x" + f"{(dtot*1000 - 1):04x}"[-4:] + "f9ff"
+        dtot_to_hex = "0x" + f"{(dtot * 1000 - 1):04x}"[-4:] + "f9ff"
 
     print("Device:", device_id)
     print("Port:", port)
@@ -451,13 +478,9 @@ if __name__ == "__main__":
     print("dtot:", dtot)
     print("Device xml:", device_xml)
     print("Silent debug output:", silent)
+    print("no-ebreakm:", args.no_ebreakm)
 
-    dbg = debugBridge.DebugBridge(device_id=device_id,
-                                comm_port=port,
-                                speed=speed,
-                                dtot=dtot_to_hex,
-                                read_timeout=read_timeout,
-                                silent=silent)
+    dbg = debugBridge.DebugBridge(device_id=device_id, comm_port=port, speed=speed, dtot=dtot_to_hex, read_timeout=read_timeout, silent=silent, ebreakm=not args.no_ebreakm)
     dbg.stop()
     dbg.breakpointHWClear()
     monitor = MonitorParser(dbg)
@@ -471,7 +494,7 @@ if __name__ == "__main__":
         conn, addr = s.accept()
         conn.setblocking(0)
         with conn:
-            print('Connected by', addr)
+            print("Connected by", addr)
             while True:
                 # Should iterate through buffer and take out commands/escape characters
                 ready = select.select([conn], [], [], 0.5)
@@ -479,3 +502,4 @@ if __name__ == "__main__":
                     data = conn.recv(8192)
                     if len(data) > 0:
                         handleData(conn, data)
+
