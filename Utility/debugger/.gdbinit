@@ -18,6 +18,7 @@ python
 #    that are present.
 # 6. Addition of new Peripherals and CLIC Registers inheriting from
 #    MemoryMappedIO.
+# 7. fix: errors on hardware assisted breakpoints.
 
 # License ----------------------------------------------------------------------
 
@@ -360,6 +361,16 @@ def fetch_breakpoints(watchpoints=False, pending=False):
                 is_enabled = fields[3] == 'y'
                 address_info = address, is_enabled
                 parsed_breakpoints[number] = [address_info], is_pending, ''
+            elif len(fields) >= 5 and (fields[1] == 'hw' and fields[2] == 'breakpoint'):
+                # unlike software breakpoints, the hardware breakpoints have one extra element 'hw' in the
+                # array at position [1]. So it is required to shift the array index by 1 to compute the
+                # other values.
+                is_pending = fields[5] == '<PENDING>'
+                is_multiple = fields[5] == '<MULTIPLE>'
+                address = None if is_multiple or is_pending else int(fields[5], 16)
+                is_enabled = fields[4] == 'y'
+                address_info = address, is_enabled
+                parsed_breakpoints[number] = [address_info], is_pending, ''
             elif len(fields) >= 5 and fields[1] == 'catchpoint':
                 # only take before comma, but ignore commas in quotes
                 what = catch_what_regex.search(' '.join(fields[4:])).group(0).strip()
@@ -387,7 +398,7 @@ def fetch_breakpoints(watchpoints=False, pending=False):
         is_pending = getattr(gdb_breakpoint, 'pending', is_pending)
         if not pending and is_pending:
             continue
-        if not watchpoints and gdb_breakpoint.type != gdb.BP_BREAKPOINT:
+        if not watchpoints and gdb_breakpoint.type != gdb.BP_BREAKPOINT and gdb_breakpoint.type != gdb.BP_HARDWARE_BREAKPOINT:
             continue
         # add useful fields to the object
         breakpoint = dict()
@@ -2571,6 +2582,7 @@ class Breakpoints(Dashboard.Module):
 
     NAMES = {
         gdb.BP_BREAKPOINT: 'break',
+        gdb.BP_HARDWARE_BREAKPOINT: 'hardware break',
         gdb.BP_WATCHPOINT: 'watch',
         gdb.BP_HARDWARE_WATCHPOINT: 'write watch',
         gdb.BP_READ_WATCHPOINT: 'read watch',
@@ -2595,7 +2607,7 @@ class Breakpoints(Dashboard.Module):
             if not R.ansi and breakpoint['enabled']:
                 bp_type = 'disabled ' + bp_type
             line = '[{}] {}'.format(number, bp_type)
-            if breakpoint['type'] == gdb.BP_BREAKPOINT:
+            if breakpoint['type'] in [gdb.BP_BREAKPOINT, gdb.BP_HARDWARE_BREAKPOINT]:
                 for i, address in enumerate(breakpoint['addresses']):
                     addr = address['address']
                     if i == 0 and addr:
