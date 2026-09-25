@@ -96,12 +96,9 @@ The server currently supports the following packet types:
 | `M`    | Write memory.               |
 | `c`    | Continue execution.         |
 | `s`    | Single-step execution.      |
-| `z`    | Remove hardware breakpoint. |
-| `Z`    | Insert hardware breakpoint. |
+| `z`    | Remove breakpoint.          |
+| `Z`    | Insert breakpoint.          |
 | `q`    | Essential query packets.    |
-
-**Note**
-The current implementation does not support software breakpoints. The standard GDB breakpoint commands (`Z0` and `z0`) are mapped to the two hardware trigger modules implemented in the Pearl3 microcontroller.
 
 ### GDB Monitor Commands
 

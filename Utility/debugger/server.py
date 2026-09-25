@@ -1,12 +1,12 @@
 # This code is a modification of https://github.com/stemnic/pyAVRdbg/blob/master/main.py
 
-import socket
-import debugBridge
-import signal
-import sys
-import select
 import argparse
-import time
+import select
+import signal
+import socket
+import sys
+
+import debugBridge
 
 
 class RSPParser:
@@ -71,7 +71,8 @@ class MonitorParser:
                  [image]             - Information about the firmware image stored in memory.
                  [memory]            - Target memory regions.
             capture                  - Prepare to receive a firmware image from the next GDB 'load' command.
-            ebreakm 0:1              - Enter debug mode on ebreak instruction.
+            ebreakm 0:1              - Enter debug mode on ebreak instruction. 0 = Enter exception handler, 1 = Enter debug mode.
+            max-hwbreak 1..8         - Number of hardware breakpoints to use. Value must be in range 1 and 8.
             flash [rom:ram]          - Flash the firmware image stored in memory into target [only rom or ram section].
             erase image              - Erase firmware image stored in memory.
                   target [rom:ram]   - Erase all sections of the target [only rom or ram section of the target].
@@ -94,7 +95,7 @@ class MonitorParser:
                     return self.rsp_string(f"Command '{cmd[0]}' takes only one optional parameter.\n")
                 if len(cmd) > 1:
                     if cmd[1] == "halt":
-                        self.dbg.reset_and_halt()
+                        self.dbg.resetAndHalt()
                         return "OK"
                     else:
                         return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
@@ -106,54 +107,65 @@ class MonitorParser:
                 return "OK"
             elif cmd[0] == "info":
                 if len(cmd) == 1:
-                    string, _ = self.dbg.monitor_status()
+                    string, _ = self.dbg.monitor_targetStatusInfo()
                     return string.encode("ascii").hex()
                 elif len(cmd) == 2:
                     if cmd[1] in ["breakpoints", "break"]:
-                        string = self.dbg.monitor_breakpoints()
+                        string = self.dbg.monitor_breakpointsInfo()
                         return string.encode("ascii").hex()
                     elif cmd[1] == "status":
-                        string, _ = self.dbg.monitor_status()
+                        string, _ = self.dbg.monitor_targetStatusInfo()
                         return string.encode("ascii").hex()
                     elif cmd[1] == "image":
-                        string = self.dbg.inspect_image()
+                        string = self.dbg.monitor_imageInfo()
                         return string.encode("ascii").hex()
                     elif cmd[1] == "memory":
-                        string = self.dbg.memory_region()
+                        string = self.dbg.monitor_memoryRegionInfo()
                         return string.encode("ascii").hex()
 
                 return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
             elif cmd[0] == "capture":
                 # Loading firmware with binary write is not supported instead this command would initialize the firmware image.
-                self.dbg.begin_image()
+                self.dbg.monitor_beginImage()
                 return self.rsp_string("Ready to receive firmware.\n")
             elif cmd[0] == "ebreakm":
                 if len(cmd) == 2:
                     if cmd[1] in ["0", "1"]:
-                        self.dbg.ebreakDebug(cmd[1] == "1")
+                        self.dbg.monitor_ebreakDebug(cmd[1] == "1")
                         return "OK"
                     else:
                         return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
                 else:
                     return self.rsp_string(f"Command '{cmd[0]}' takes one parameter 0/1.\n")
+            elif cmd[0] == "max-hwbreak":
+                if len(cmd) == 2:
+                    if cmd[1] in [f"{n}" for n in range(1, 9)]:
+                        if self.dbg.monitor_maxHWBreak(int(cmd[1])):
+                            return "OK"
+                        else:
+                            return self.rsp_string("Value must be in range 1 and 8.\n")
+                    else:
+                        return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
+                else:
+                    return self.rsp_string(f"Command '{cmd[0]}' takes one value in range 1 and 8.\n")
             elif cmd[0] == "flash":
                 if len(cmd) > 2:
                     return self.rsp_string(f"Command '{cmd[0]}' takes only one optional parameter.\n")
                 if len(cmd) > 1:
                     if cmd[1] == "rom":
-                        if self.dbg.download_image("rom"):
+                        if self.dbg.monitor_flashImageOnTarget("rom"):
                             return self.rsp_string("Done downloading rom image into target.\n")
                         else:
                             return self.rsp_string("Error while trying to rom download image into target.\n")
                     elif cmd[1] == "ram":
-                        if self.dbg.download_image("ram"):
+                        if self.dbg.monitor_flashImageOnTarget("ram"):
                             return self.rsp_string("Done downloading ram image into target.\n")
                         else:
                             return self.rsp_string("Error while trying to ram download image into target.\n")
                     else:
                         return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
                 else:
-                    if self.dbg.download_image("all"):
+                    if self.dbg.monitor_flashImageOnTarget("all"):
                         return self.rsp_string("Done downloading image into target.\n")
                     else:
                         return self.rsp_string("Error while trying to download image into target.\n")
@@ -162,10 +174,10 @@ class MonitorParser:
                     # 3 parameters passed
                     if cmd[1] == "target":
                         if cmd[2] == "rom":
-                            self.dbg.erase_target_firmware("rom")
+                            self.dbg.monitor_eraseFirmwareFromTarget("rom")
                             return self.rsp_string("Erased rom image from target.\n")
                         elif cmd[2] == "ram":
-                            self.dbg.erase_target_firmware("ram")
+                            self.dbg.monitor_eraseFirmwareFromTarget("ram")
                             return self.rsp_string("Erased ram image from target.\n")
                         else:
                             return self.rsp_string(f"Invalid parameter '{cmd[2]}' after '{cmd[1]}'.\n")
@@ -174,10 +186,10 @@ class MonitorParser:
                 elif len(cmd) == 2:
                     # 2 parameters passed
                     if cmd[1] == "image":
-                        self.dbg.erase_firmware()
+                        self.dbg.monitor_eraseFirmware()
                         return self.rsp_string("Erased firmware image from host.\n")
                     elif cmd[1] == "target":
-                        self.dbg.erase_target_firmware("all")
+                        self.dbg.monitor_eraseFirmwareFromTarget("all")
                         return self.rsp_string("Erased firmware image from target.\n")
                     else:
                         return self.rsp_string(f"Invalid parameter '{cmd[1]}' after '{cmd[0]}'.\n")
@@ -194,6 +206,7 @@ lastPacket = ""
 
 SIGTRAP = "S05"
 last_SIGVAL = "S00"
+T05TRAP = "T05swbreak:;"
 
 
 def signal_handler(sig, frame):
@@ -206,7 +219,6 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 def sendPacket(socket, packetData):
-    lastPacket = packetData
     checksum = sum(packetData.encode("ascii")) % 256
     message = "$" + packetData + "#" + format(checksum, "02x")
     if packetData == "":
@@ -229,7 +241,7 @@ def handleCommand(socket, command):
                 sendPacket(socket, "0")
                 return
             elif "Supported" in query:
-                sendPacket(socket, "PacketSize=10000000;hwbreak+;swbreak-;qXfer:features:read+")
+                sendPacket(socket, "PacketSize=10000000;hwbreak+;swbreak+;qXfer:features:read+")
                 return
             elif "Symbol::" in query:
                 sendPacket(socket, "OK")
@@ -260,17 +272,22 @@ def handleCommand(socket, command):
         if len(command) > 1:
             addr = command[1:]
 
-        status = dbg.run()
+        status, ret_pc = dbg.run()
 
         if status == dbg.STOPPED:
-            sendPacket(socket, SIGTRAP)
-            last_SIGVAL = SIGTRAP
+            trap_reason = f"{T05TRAP}20:{ret_pc};" if ret_pc else SIGTRAP
+            sendPacket(socket, trap_reason)
+            last_SIGVAL = trap_reason
 
     elif "z" == command[0]:
         breakpointType = command[1]
         addr = command.split(",")[1]
 
-        if breakpointType in ["0", "1"]:
+        if "0" == breakpointType:
+            # SW breakpoint
+            resp = dbg.breakpointSWClear(int(addr, 16))
+            sendPacket(socket, resp)
+        elif "1" == breakpointType:
             # HW breakpoint
             resp = dbg.breakpointHWClear(int(addr, 16))
             sendPacket(socket, resp)
@@ -281,7 +298,11 @@ def handleCommand(socket, command):
         breakpointType = command[1]
         addr = command.split(",")[1]
 
-        if breakpointType in ["0", "1"]:
+        if "0" == breakpointType:
+            # SW breakpoint
+            resp = dbg.breakpointSWSet(int(addr, 16))
+            sendPacket(socket, resp)
+        elif "1" == breakpointType:
             # HW breakpoint
             resp = dbg.breakpointHWSet(int(addr, 16))
             sendPacket(socket, resp)
@@ -314,7 +335,7 @@ def handleCommand(socket, command):
         data = (addrSizeData.split(",")[1]).split(":")[1]
 
         if dbg.loader.active:
-            if dbg.save_firmware_image(int(addr, 16), data, int(size, 16)):
+            if dbg.saveFirmwareImage(int(addr, 16), data, int(size, 16)):
                 sendPacket(socket, "OK")
             else:
                 sendPacket(socket, "E01")
@@ -324,7 +345,6 @@ def handleCommand(socket, command):
             else:
                 sendPacket(socket, "E01")
     elif "X" == command[0]:
-        # dbg.begin_image()
         sendPacket(socket, "")
     elif "g" == command:
         regs = dbg.readRegs()
@@ -350,15 +370,15 @@ def handleCommand(socket, command):
             sendPacket(socket, "E01")
             return
 
-        for r in range(0, 54):
-            if not dbg.writeRegister(r, data[8 * r : 8 * r + 8]):
+        for r in range(54):
+            if not dbg.writeAnyRegister(r, data[8 * r : 8 * r + 8]):
                 success = False
                 break
 
         sendPacket(socket, "OK" if success else "E01")
     elif "k" == command[0]:
         dbg.cleanup()
-        quit()
+        sys.exit()
     elif "p" == command[0]:
         # Reads register
         if len(command) > 1:
@@ -392,7 +412,7 @@ def handleCommand(socket, command):
         regno = regnoData.split("=")[0]
         data = regnoData.split("=")[1]
 
-        if dbg.writeRegister(int(regno, 16), data):
+        if dbg.writeAnyRegister(int(regno, 16), data):
             sendPacket(socket, "OK")
         else:
             sendPacket(socket, "E01")
@@ -442,12 +462,14 @@ if __name__ == "__main__":
     # Arguments
     parser.add_argument("--device", help="Device ID", type=str, default="prvx3imc48sh")
     parser.add_argument("-p", "--port", help="Serial port to debugger", type=str, default="/dev/cu.usbserial-0078EE22")
-    parser.add_argument("-s", "--speed", help="Serial communication speed", type=int, default=115200)
-    parser.add_argument("--dtot", help="Debug timeout timer in seconds (must be in integer and value >= 1)", type=int, default=3)
-    parser.add_argument("--xml", help="Device xml file containing information of registers", type=str)
+    parser.add_argument("-s", "--speed", help="Serial communication speed (default: 115200)", type=int, default=115200)
+    parser.add_argument("--dtot", help="Debug timeout timer in seconds (must be an integer value >= 1) (default: 3)", type=int, default=3)
+    parser.add_argument("--xml", help="Device xml file containing information of registers", type=str, default="prvx32_target.xml")
     parser.add_argument("--silent-all", help="Silent all terminal outputs", action="store_true")
     parser.add_argument("--silent-info", help="Silent only info terminal outputs", action="store_true")
-    parser.add_argument("--no-ebreakm", help="Enter exception handler on ebreak instruction", action="store_true")
+    parser.add_argument("--show-mem", help="Show memory transaction terminal outputs", action="store_true")
+    parser.add_argument("--no-ebreakm", help="Enter exception handler instead of debug mode on ebreak instruction", action="store_true")
+    parser.add_argument("--max-hwbreak", help="Number of hardware breakpoints to use (must be between 1 and 8)", type=int, default=2)
 
     args = parser.parse_args()
 
@@ -456,21 +478,30 @@ if __name__ == "__main__":
     speed = args.speed
     dtot = args.dtot
     device_xml = args.xml
+    break_num = args.max_hwbreak
 
-    silent = "none"
+    silent = []
     if args.silent_all:
-        silent = "all"
-    elif args.silent_info:
-        silent = "info"
+        silent = ["info", "error", "mem"]
+    else:
+        if args.silent_info:
+            silent.append("info")
+
+        if not args.show_mem:
+            silent.append("mem")
 
     read_timeout = dtot + 0.5  # Transport layer read timeout is
 
     if dtot < 1:
         parser.print_help()
-        exit()
+        sys.exit()
     else:
         ## e.g. "1387f9ff" -> 5000 * 1 ms : "f9ff" represents the prescale value that sets the timer to 1 ms. 5000 - 1 = 1387 in hex
         dtot_to_hex = "0x" + f"{(dtot * 1000 - 1):04x}"[-4:] + "f9ff"
+
+    if not (1 <= break_num <= 8):
+        parser.print_help()
+        sys.exit()
 
     print("Device:", device_id)
     print("Port:", port)
@@ -479,10 +510,12 @@ if __name__ == "__main__":
     print("Device xml:", device_xml)
     print("Silent debug output:", silent)
     print("no-ebreakm:", args.no_ebreakm)
+    print("Number of hardware breakpoints to be used:", break_num)
 
-    dbg = debugBridge.DebugBridge(device_id=device_id, comm_port=port, speed=speed, dtot=dtot_to_hex, read_timeout=read_timeout, silent=silent, ebreakm=not args.no_ebreakm)
+    dbg = debugBridge.DebugBridge(device_id=device_id, comm_port=port, speed=speed, dtot=dtot_to_hex, read_timeout=read_timeout, break_num=break_num, silent=silent, ebreakm=not args.no_ebreakm)
     dbg.stop()
     dbg.breakpointHWClear()
+    dbg.breakpointSWClear()
     monitor = MonitorParser(dbg)
 
     rsp = RSPParser()
@@ -502,4 +535,3 @@ if __name__ == "__main__":
                     data = conn.recv(8192)
                     if len(data) > 0:
                         handleData(conn, data)
-

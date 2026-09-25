@@ -1,8 +1,9 @@
 import math
-import debugger as dbg
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
+
+import debugger as dbg
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
@@ -10,7 +11,9 @@ import Loader
 
 
 class DebugBridge(dbg.DeviceStatus):
-    def __init__(self, device_id, comm_port, speed, dtot, read_timeout, silent="none", ebreakm=False):
+    def __init__(self, device_id, comm_port, speed, dtot, read_timeout, break_num=1, silent=None, ebreakm=False):
+        if silent is None:
+            silent = []
         self.dbg = dbg.Debugger(device_id=device_id, comm_port=comm_port, speed=speed, read_timeout=read_timeout, test_mode=False, silent=silent)
 
         self.loader = ImageLoader()
@@ -19,18 +22,12 @@ class DebugBridge(dbg.DeviceStatus):
         self.comm_port = comm_port
         self.speed = speed
         self.dtot = dtot
-        self.silent_log = [""]
-
-        if silent == "none":
-            pass
-        elif silent == "info":
-            self.silent_log = ["info"]
-        elif silent == "all":
-            self.silent_log = ["info", "error"]
+        self.silent_log = silent
+        self.max_hwbreak = break_num
 
         self.ebreakm = ebreakm
 
-        self.breakpoints = {
+        self.hwbreak = {
             0: None,
             1: None,
             2: None,
@@ -40,6 +37,8 @@ class DebugBridge(dbg.DeviceStatus):
             6: None,
             7: None,
         }
+
+        self.swbreak = {}
 
         self.csr_addr = {
             # 32: "0x7B1", # pc = dpc
@@ -75,69 +74,92 @@ class DebugBridge(dbg.DeviceStatus):
         self.clic_start = self.dbg.devices.get(self.device_id).get("clic")[0]
         self.clic_size_word = self.dbg.devices.get(self.device_id).get("clic")[1]
 
-    def logging(self, msg, log_type):
-        if log_type not in self.silent_log:
-            print(msg)
-
-    def ensure_debug_mode(self, cmd: str):
-        tries = 0
-
-        while self.dbg.device_status != self.STOPPED and tries < 3:
-            self.logging(f"Trying to execute '{cmd}'. Device not halted. Entering debug mode.", "info")
-            self.stop()
-            self.monitor_status()
-
-            tries += 1
-            time.sleep(0.5)
-
-        return self.dbg.device_status == self.STOPPED
-
-    def ebreakDebug(self, state: bool):
-        self.ebreakm = state
+    ########################################################
+    ############### General API for Commands ###############
+    ########################################################
 
     def step(self):
         self.ensure_debug_mode("step")
-        self.dbg.Step(self.ebreakm)
+        self.dbg.singleStep(self.ebreakm)
         return self.dbg.device_status
 
     def run(self):
+        ret_pc = None
         if self.dbg.device_status == self.STOPPED:
-            self.dbg.Continue(self.ebreakm)
-        return self.dbg.device_status
+            status, ret_pc = self.dbg.resumeExecution(self.ebreakm)
+            if status == 1 and self.dbg.getDCSRCause() != 1:
+                ret_pc = None
+        return self.dbg.device_status, ret_pc
 
     def stop(self, prg_halt=False):
-        self.dbg.enter_debug(self.dtot, use_dtot=True, prg_halt=prg_halt)
+        self.dbg.enterDebug(self.dtot, use_dtot=True, prg_halt=prg_halt)
+        return self.dbg.device_status
+
+    def cleanup(self):
+        self.dbg.exitDebug()
         return self.dbg.device_status
 
     def breakpointHWSet(self, address: int):
         addr = address & int(str(0xFFFFFFFF), 0)  # make sure the integer fits within 32 bits
         addr_hex = hex(addr)  # convert the int into hex string
 
-        self.ensure_debug_mode("breakpoints set")
+        self.ensure_debug_mode("hw breakpoints set")
 
-        for b, a in self.breakpoints.items():
-            if a is None and self.dbg.Trig_set(addr_hex, b) is not None:
+        for b, a in self.hwbreak.items():
+            if a is None and b < self.max_hwbreak and self.dbg.setTrigger(addr_hex, b) is not None:
                 # If bpt was not set earlier i.e. it is None, then set the breakpoint
-                self.breakpoints[b] = addr
+                self.hwbreak[b] = addr
                 return "OK"
 
         return "E01"
 
     def breakpointHWClear(self, address=None):
-        self.ensure_debug_mode("breakpoints clear")
+        self.ensure_debug_mode("hw breakpoints clear")
 
         if address is None:
-            # If no address provided then remove all breakpoints
+            # If no address is provided then remove all breakpoints
             for bp in range(8):
-                self.dbg.Trig_remove(bp)
+                self.dbg.removeTrigger(bp)
 
             return "OK"
         else:
-            for b, a in self.breakpoints.items():
-                if a == address and self.dbg.Trig_remove(b) is not None:
+            for b, a in self.hwbreak.items():
+                if a == address and self.dbg.removeTrigger(b) is not None:
                     # Only remove breakpoints if the address exists in the table
-                    self.breakpoints[b] = None
+                    self.hwbreak[b] = None
                     return "OK"
+
+        return "E01"
+
+    def breakpointSWSet(self, address: int):
+        addr = address & int(str(0xFFFFFFFF), 0)  # make sure the integer fits within 32 bits
+        addr_hex = hex(addr)  # convert the int into hex string
+
+        self.ensure_debug_mode("sw breakpoints set")
+
+        if addr_hex not in self.swbreak:
+            original_val = self.dbg.setSWBreak(addr=addr_hex)
+            self.swbreak[addr_hex] = original_val
+            return "OK"
+
+        return "E01"
+
+    def breakpointSWClear(self, address=None):
+        self.ensure_debug_mode("sw breakpoints clear")
+
+        if address is None:
+            # If no address is provided then remove all breakpoints
+            for a, v in self.swbreak.items():
+                self.dbg.removeSWBreak(addr=a, original_val=v)
+            self.swbreak.clear()
+            return "OK"
+        else:
+            addr = address & int(str(0xFFFFFFFF), 0)  # make sure the integer fits within 32 bits
+            addr_hex = hex(addr)  # convert the int into hex string
+
+            if addr_hex in self.swbreak:
+                self.dbg.removeSWBreak(addr=addr_hex, original_val=self.swbreak.pop(addr_hex))
+                return "OK"
 
         return "E01"
 
@@ -159,10 +181,10 @@ class DebugBridge(dbg.DeviceStatus):
         self.ensure_debug_mode("read memory")
         data = bytearray()
 
-        self.logging(f"Original read request {hex(addr)} onwards, size {size} bytes", "info")
-        self.logging(f"Reading from memory address {hex(align_addr)} onwards, size {bytes_needed} bytes", "info")
+        self.logging(f"Original read request {hex(addr)} onwards, size {size} bytes", "mem")
+        self.logging(f"Reading from memory address {hex(align_addr)} onwards, size {bytes_needed} bytes", "mem")
 
-        for w in range(0, math.ceil(bytes_needed / 4)):
+        for w in range(math.ceil(bytes_needed / 4)):
             mem = self.dbg.getMem(hex(align_addr + (w << 2)))  # returns mem value as a hex string e.g "aabbccdd"
 
             if mem is None:
@@ -170,14 +192,11 @@ class DebugBridge(dbg.DeviceStatus):
 
             mem_ba = bytearray.fromhex(mem)  # convert mem in the form of : bytearray(b'\xaa\xbb\xcc\xdd')
             mem_ba.reverse()  # reverse the order : bytearray(b'\xdd\xcc\xbb\xaa')
-            self.logging(f"@ {hex(align_addr + (w << 2))} : {mem}", "info")
+            self.logging(f"@ {hex(align_addr + (w << 2))} : {mem}", "mem")
 
             data = data + mem_ba
 
         return data[offset : offset + size]
-
-    def reverse_endian(self, word: str):
-        return "".join(reversed([word[i : i + 2] for i in range(0, 8, 2)]))
 
     def writeMem(self, address: int, value: str, size: int = 1, ignore_value: bool = False):
         """
@@ -190,10 +209,10 @@ class DebugBridge(dbg.DeviceStatus):
             1. aligned_word_read = read(align_addr)
             2. modified_word = modify only the portion of the aligned_word_read.
             3. write(align_addr, modified_word)
-        
+
         for w in range(0, math.ceil(size / 4)):
             continue writing to word aligned memory from here onwards.
-        
+
         --------------------------------------------------------------
 
         Scenario 1: Continuous memory writes:
@@ -209,7 +228,7 @@ class DebugBridge(dbg.DeviceStatus):
 
         align_addr = 0x1000_0028
         align_word_read = read(align_addr) = let's say 0xcaadf00d
-        
+
         addr     :   0x100000_28    29    2a    2b
         old data :            ca    ad    f0    0d (let's say)
         new_data :            ca    ad    ba    ba
@@ -247,13 +266,13 @@ class DebugBridge(dbg.DeviceStatus):
                  base address = 0x1000_0029,
                  value = abcd
                  value_arr = [abcd]
-        
+
         First modification (always for the first word):
         -----------------------------------------------
 
         align_addr = 0x1000_0028
         align_word_read = read(align_addr) = let's say 0xcaadf00d
-        
+
         addr     :   0x100000_28    29    2a    2b
         old data :            ca    ad    f0    0d (let's say)
         new_data :            ca    ab    cd    0d
@@ -270,7 +289,7 @@ class DebugBridge(dbg.DeviceStatus):
 
         self.ensure_debug_mode("write memory")
 
-        for w in range(0, math.ceil(bytes_needed / 4)):
+        for w in range(math.ceil(bytes_needed / 4)):
             new_data = ""
             if w == 0:  # First modification (read-modify-write)
                 # Always read the old contents and modify only the affected bytes
@@ -378,6 +397,26 @@ class DebugBridge(dbg.DeviceStatus):
 
         return True  # Right now always return True
 
+    def writeAnyRegister(self, regno: int, regval: str):
+        """
+        write value to register `regno`.
+        """
+
+        # reorder bytes from little to big endian
+        value = self.reverse_endian(regval)
+
+        if regno == 32:
+            if self.writePC(int(value, 16)):
+                return True
+        elif regno < 32:
+            # Core registers x0 - x31
+            if self.writeGPR(regno, int(value, 16)):
+                return True
+        elif 32 < regno < 54 and self.writeCSR(regno, int(value, 16)):
+            return True
+
+        return False
+
     def readPC(self):
         self.ensure_debug_mode("read PC")
         data = bytearray.fromhex(self.dbg.dpc)
@@ -394,28 +433,6 @@ class DebugBridge(dbg.DeviceStatus):
 
         return True  # Right now always return True
 
-    def writeRegister(self, regno: int, regval: str):
-        """
-        write value to register regno.
-        """
-
-        # reorder bytes from little to big endian
-        value = self.reverse_endian(regval)
-
-        if regno == 32:
-            if self.writePC(int(value, 16)):
-                return True
-        elif regno < 32:
-            # Core registers x0 - x31
-            if self.writeGPR(regno, int(value, 16)):
-                return True
-        elif 32 < regno < 54:
-            # CSRs
-            if self.writeCSR(regno, int(value, 16)):
-                return True
-
-        return False
-
     def reset(self):
         self.ensure_debug_mode("reset")
         self.cleanup()
@@ -423,7 +440,7 @@ class DebugBridge(dbg.DeviceStatus):
         time.sleep(0.5)
         Loader.deliver_machine_code("", self.comm_port, self.speed, self.device_id, "r")
 
-    def reset_and_halt(self):
+    def resetAndHalt(self):
         self.ensure_debug_mode("reset and halt")
         time.sleep(0.5)
 
@@ -433,15 +450,29 @@ class DebugBridge(dbg.DeviceStatus):
         Loader.deliver_machine_code("", self.comm_port, self.speed, self.device_id, "rh")
         self.stop(prg_halt=True)
 
-    def begin_image(self):
-        self.loader.begin()
-
-    def save_firmware_image(self, address: int, data: str, size: int):
+    def saveFirmwareImage(self, address: int, data: str, size: int):
         if not self.loader.add_section(address, data, size):
             self.logging("[ERROR] Inactive image section cannot be modified.", "error")
             return False
 
         return True
+
+    ########################################################
+    ################ Monitor configurations ################
+    ########################################################
+
+    def monitor_ebreakDebug(self, state: bool):
+        self.ebreakm = state
+
+    def monitor_maxHWBreak(self, break_num: int):
+        if 1 <= break_num <= 8:
+            self.max_hwbreak = break_num
+            return True
+
+        return False
+
+    def monitor_beginImage(self):
+        self.loader.begin()
 
     def finish_receive(self, command):
         # In certain cases, the gdb "load" command can send "X", "q", "?", or "m" packets.
@@ -453,7 +484,7 @@ class DebugBridge(dbg.DeviceStatus):
             self.logging(f"Freezing firmware image, {len(self.loader.image)} sections added.", "system")
             self.loader.done()
 
-    def download_image(self, image_section: str = "all"):
+    def monitor_flashImageOnTarget(self, image_section: str = "all"):
         self.loader.done()
 
         if image_section == "all":
@@ -475,14 +506,11 @@ class DebugBridge(dbg.DeviceStatus):
                     self.writeMem(section.address, section.data, section.size)
                 else:
                     self.logging(f"[INFO] Skipping section at address: {hex(section.address)}", "system")
-        self.logging(f"[INFO] Done programming.", "system")
+        self.logging("[INFO] Done programming.", "system")
 
         return True
 
-    def erase_firmware(self):
-        self.loader.clear_image()
-
-    def erase_target_firmware(self, image_section: str = "all"):
+    def monitor_eraseFirmwareFromTarget(self, image_section: str = "all"):
         self.logging(f"[INFO] Erasing {image_section} sections from target ...", "system")
 
         # Set value register now and ignore re-writing it again for subsequent memory addresses
@@ -495,11 +523,14 @@ class DebugBridge(dbg.DeviceStatus):
             self.writeMem(int(self.ram_start, 16), "00" * self.ram_size_word * 4, self.ram_size_word * 4, ignore_value=True)
             self.writeMem(int(self.rom_start, 16), "00" * self.rom_size_word * 4, self.rom_size_word * 4, ignore_value=True)
 
-        self.logging(f"[INFO] Done erasing.", "system")
+        self.logging("[INFO] Done erasing.", "system")
 
         return True
 
-    def inspect_image(self):
+    def monitor_eraseFirmware(self):
+        self.loader.clear_image()
+
+    def monitor_imageInfo(self):
         string = "No firmware image found.\n"
         if self.loader.image:
             string = "Firmware Image:\n---------------\n"
@@ -528,8 +559,8 @@ class DebugBridge(dbg.DeviceStatus):
 
         return string
 
-    def memory_region(self):
-        string = f"Device ID {self.device_id.upper()}\n"
+    def monitor_memoryRegionInfo(self):
+        string = f"Target ID {self.device_id.upper()}\n"
         string += f"RAM\n{self.ram_start} - {hex(int(self.ram_start, 16) + self.ram_size_word * 4 - 1)}  size {self.ram_size_word * 4} bytes\n"
         string += f"IO\n{self.io_start} - {hex(int(self.io_start, 16) + self.io_size_word * 4 - 1)}  size {self.io_size_word * 4} bytes\n"
         string += f"CLIC\n{self.clic_start} - {hex(int(self.clic_start, 16) + self.clic_size_word * 4 - 1)}  size {self.clic_size_word * 4} bytes\n"
@@ -537,24 +568,25 @@ class DebugBridge(dbg.DeviceStatus):
 
         return string
 
-    def monitor_status(self):
+    def monitor_targetStatusInfo(self):
         string = "Debug error. Execute halt command to re-enter debug mode.\n"
 
         if self.dbg.device_status == self.STOPPED:
-            string = "Device Stopped in debug mode.\n"
+            string = "Target Stopped in debug mode.\n"
         elif self.dbg.device_status == self.RUNNING:
-            string = "Device Running.\n"
+            string = "Target Running.\n"
         elif self.dbg.device_status == self.UNDEF:
-            string = "Device in UNDEF state.\n"
+            string = "Target in UNDEF state.\n"
         elif self.dbg.device_status == self.TIMEOUT:
             string = "Debug timeout. Execute halt command to re-enter debug mode.\n"
 
         return string, self.dbg.device_status
 
-    def monitor_breakpoints(self):
-        string = "Device breakpoints:\n"
+    def monitor_breakpointsInfo(self):
+        string = f"Number of breakpoints to be used: {self.max_hwbreak}\n"
+        string += "Supported breakpoints:\n"
 
-        for b, a in self.breakpoints.items():
+        for b, a in self.hwbreak.items():
             if a is None:
                 string += f"{b} : {a}\n"
             else:
@@ -562,9 +594,29 @@ class DebugBridge(dbg.DeviceStatus):
 
         return string
 
-    def cleanup(self):
-        self.dbg.Exit()
-        return self.dbg.device_status
+    ########################################################
+    ####################### Internal #######################
+    ########################################################
+
+    def logging(self, msg, log_type):
+        if log_type not in self.silent_log:
+            print(f"{time.strftime('%H:%M:%S')} {msg}")
+
+    def ensure_debug_mode(self, cmd: str):
+        tries = 0
+
+        while self.dbg.device_status != self.STOPPED and tries < 3:
+            self.logging(f"Trying to execute '{cmd}'. Target not halted. Entering debug mode.", "info")
+            self.stop()
+            self.monitor_targetStatusInfo()
+
+            tries += 1
+            time.sleep(0.5)
+
+        return self.dbg.device_status == self.STOPPED
+
+    def reverse_endian(self, word: str):
+        return "".join(reversed([word[i : i + 2] for i in range(0, 8, 2)]))
 
 
 class ImageLoader:
