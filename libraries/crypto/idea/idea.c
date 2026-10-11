@@ -1,6 +1,7 @@
 /**
  * @file    idea.c
- * @brief   Provides Implementation for International Data Encryption Algorithm (IDEA).
+ * @brief   Provides Implementation for International Data Encryption Algorithm (IDEA) in
+ *          Cipher Block Chaining (CBC) mode.
  * @version 0.1
  * @date    2026-08-08
  *
@@ -27,7 +28,7 @@ typedef enum
 } idea_cipher_op_t;
 
 idea_block_directory_t idea_block = {0};
-uint32_t cipher_text_len; // cipher text length - returned after encryption
+size_t cipher_text_len; // cipher text length - returned after encryption
 
 static void idea_cipher(idea_cipher_op_t op);
 static void idea_round(uint16_t *y_out, uint16_t *x_in, uint16_t *z_in);
@@ -95,7 +96,7 @@ IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config)
     uint8_t *pt = config->plainText;
     uint8_t *ct = config->cipherText;
 
-    uint32_t len = config->textLen;
+    size_t len = config->textLen;
 
     if (len == 0)
         return IDEA_STATUS_INVALID_MESSAGE_LENGTH;
@@ -108,7 +109,7 @@ IDEA_STATUS_t IDEA_EncryptText(IDEA_CONFIG_t *config)
 
     uint8_t block[8];
 
-    for (uint32_t offset = 0; offset < len + padding; offset += 8)
+    for (size_t offset = 0; offset < len + padding; offset += 8)
     {
         // Construct an 8-byte plaintext block
         for (uint8_t j = 0; j < 8; j++)
@@ -179,7 +180,7 @@ IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config)
     uint8_t *ct = config->cipherText;
     uint8_t *dt = config->decryptText;
 
-    uint32_t len = config->textLen;
+    size_t len = config->textLen;
 
     if ((len == 0) || (len % 8 != 0))
         return IDEA_STATUS_INVALID_CIPHER_LENGTH;
@@ -187,7 +188,7 @@ IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config)
     cipher_text_len = 0;
     uint8_t block[8];
 
-    for (uint32_t offset = 0; offset < len; offset +=8)
+    for (size_t offset = 0; offset < len; offset +=8)
     {
         // Construct an 8-byte ciphertext block
         for (uint8_t j = 0; j < 8; j++)
@@ -244,10 +245,10 @@ IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config)
 /**
  * @brief API to get the actual length of the cipher text in bytes after encrypt/decrypt operation.
  * 
- * @param config    Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
- * @return uint32_t Number of bytes.
+ * @param config  Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
+ * @return size_t Number of bytes.
  */
-uint32_t IDEA_GetCipherTextLength(IDEA_CONFIG_t *config)
+size_t IDEA_GetCipherTextLength(IDEA_CONFIG_t *config)
 {
     if (config != NULL)
         return cipher_text_len;

@@ -1,8 +1,8 @@
     .file "start.S"
-    
+
     .section .startup, "ax"
 
-    .globl	main
+    .globl  main
     .globl  __global_pointer$
     .globl  _sp
     .globl  _enter
@@ -17,9 +17,9 @@
     .globl INT6_ISR_VECTOR
     .globl INT7_ISR_VECTOR
     .globl exception_handler
-    
-    .type	_enter, @function
-    
+
+    .type   _enter, @function
+
 _enter:
     .option push
     .option norelax
@@ -32,22 +32,22 @@ _enter:
     sw      zero, 0(t0)
     addi    t0,   t0, 4
     bltu    t0,   t1, .L0
-    
+
     /* gp is set to io_orgin */
     la      gp,   __global_pointer$
-    
+
     .option pop
 
 #ifdef PRVX3IMC48SH
     la      a5,    exception_handler
     ori     a5,    a5, 2      /* MODE 2 : fast IRQ */
-    csrw    mtvec, a5 
+    csrw    mtvec, a5
 #endif
 
     la      sp,   _sp
 
     lui     a5,   %hi(__plic_origin)
-    
+
     /* The INTx_ISR_VECTOR is always in 16 bit address from _enter. So to save code space we ignore
     the upper 16 bits of the address */
     addi    a4,   zero, %lo(INT0_ISR_VECTOR)
@@ -78,5 +78,3 @@ _enter:
 
     jal     zero, _Exit
 
-    .size	_enter, .-_enter
-	.ident	"GCC: (g2ee5e430018) 12.2.0"

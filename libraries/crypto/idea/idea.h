@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Use Low-High Algorith to compute the modulo-multiplication */
 // #define IDEA_FAST_MULOP
@@ -47,7 +48,7 @@ typedef enum
  * uint8_t *key          Pointer to IDEA key.
  * uint8_t keyLen        Length of the key, must be 128 bits.
  * uint8_t *plainText    Pointer to the data to be encrypted.
- * uint32_t textLen      Length in bytes of the data to be encrypted/decrypted.
+ * size_t  textLen       Length in bytes of the data to be encrypted/decrypted.
  * uint8_t *cipherText   (Source) Pointer to the data to be decrypted when IDEA_DecryptText is called.
  *                       (Destination) Location to store the encrypted data when IDEA_EncryptText is called.
  * uint8_t *decryptText  Location to store the decrypted data.
@@ -59,7 +60,7 @@ typedef struct
     uint8_t *key;
     uint8_t keyLen;
     uint8_t *plainText;
-    uint32_t textLen;
+    size_t textLen;
     uint8_t *cipherText;
     uint8_t *decryptText;
     IDEA_IV_t IV_type;
@@ -95,10 +96,10 @@ IDEA_STATUS_t IDEA_DecryptText(IDEA_CONFIG_t *config);
 /**
  * @brief API to get the actual length of the cipher text in bytes after encrypt/decrypt operation.
  * 
- * @param config    Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
- * @return uint32_t Number of bytes.
+ * @param config  Pointer to IDEA configurations. Use IDEA_CONFIG_t structure to set the required configurations.
+ * @return size_t Number of bytes.
  */
-uint32_t IDEA_GetCipherTextLength(IDEA_CONFIG_t *config);
+size_t IDEA_GetCipherTextLength(IDEA_CONFIG_t *config);
 
 /**
  * @brief API to get the value of the Initialization Vector uint16_t [4].
@@ -184,12 +185,12 @@ IDEA_STATUS_t IDEA_GetIV(IDEA_CONFIG_t *config, uint16_t *dest);
      */
     IDEA_STATUS_t idea_SelfTest()
     {
-        for (uint32_t i = 0; i < sizeof(idea_test_vectors) / sizeof(idea_test_vectors[0]); i++)
+        for (size_t i = 0; i < sizeof(idea_test_vectors) / sizeof(idea_test_vectors[0]); i++)
         {
             uint8_t *test_key = idea_test_vectors[i].key;
             uint8_t key_len = sizeof(idea_test_vectors[i].key) / sizeof(idea_test_vectors[i].key[0]);
             uint8_t *test_pt = idea_test_vectors[i].plain;
-            uint32_t pt_len = sizeof(idea_test_vectors[i].plain) / sizeof(idea_test_vectors[i].plain[0]);
+            size_t pt_len = sizeof(idea_test_vectors[i].plain) / sizeof(idea_test_vectors[i].plain[0]);
             uint8_t *test_ct = idea_test_vectors[i].cipher;
 
             uint8_t ct[32] = {0};
@@ -213,7 +214,7 @@ IDEA_STATUS_t IDEA_GetIV(IDEA_CONFIG_t *config, uint16_t *dest);
             if (IDEA_EncryptText(&idea_self_test_config) != IDEA_STATUS_SUCCESS)
                 return IDEA_STATUS_FAIL;
 
-            uint32_t ct_len = IDEA_GetCipherTextLength(&idea_self_test_config);
+            size_t ct_len = IDEA_GetCipherTextLength(&idea_self_test_config);
             if (ct_len != 16)  // 8 extra bytes due to padding
                 return IDEA_STATUS_FAIL;
 

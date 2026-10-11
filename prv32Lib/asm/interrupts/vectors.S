@@ -1,8 +1,8 @@
-  .file	  "vectors.S"
+  .file   "vectors.S"
 
   .section .vectors, "ax"
   .option  norvc
-  
+
   .global  INT0_ISR_VECTOR
   .global  INT1_ISR_VECTOR
   .global  INT2_ISR_VECTOR
@@ -27,7 +27,7 @@
 /* Exception codes */
 #define EXC_ILL_INSN 2
 #define EXC_BREAK    3
-#define EXC_ECALL    11 
+#define EXC_ECALL    11
 #define EXC_UNKWN    0xff
 
 /* ------------------------------ */
@@ -116,24 +116,24 @@ call_INT7:
 
 exception_handler:
     addi    sp,   sp, -64
-	sw      ra,   0(sp)
-	sw      a0,   4(sp)
-	sw      a1,   8(sp)
-	sw      a2,   12(sp)
-	sw      a3,   16(sp)
-	sw      a4,   20(sp)
-	sw      a5,   24(sp)
-	sw      a6,   28(sp)
-	sw      a7,   32(sp)
-	sw      t0,   36(sp)
-	sw      t1,   40(sp)
-	sw      t2,   44(sp)
-	sw      t3,   48(sp)
-	sw      t4,   52(sp)
-	sw      t5,   56(sp)
-	sw      t6,   60(sp)
+    sw      ra,   0(sp)
+    sw      a0,   4(sp)
+    sw      a1,   8(sp)
+    sw      a2,   12(sp)
+    sw      a3,   16(sp)
+    sw      a4,   20(sp)
+    sw      a5,   24(sp)
+    sw      a6,   28(sp)
+    sw      a7,   32(sp)
+    sw      t0,   36(sp)
+    sw      t1,   40(sp)
+    sw      t2,   44(sp)
+    sw      t3,   48(sp)
+    sw      t4,   52(sp)
+    sw      t5,   56(sp)
+    sw      t6,   60(sp)
 
-	csrr    t0,   mcause
+    csrr    t0,   mcause
     bge     t0,   zero, sync_exceptions    /* for async exceptions i.e. interrupts
                                             * t0 would evaluate to -ve (bit 31 is set)
                                             */
@@ -161,38 +161,38 @@ interrupts:
     beq     t0,   t1, call_INT7
 
     j       end_handler_ret
-    
-sync_exceptions:
-	li      t1,   EXC_ILL_INSN
-	beq     t0,   t1, handle_illegal_insn
-	li      t1,   EXC_ECALL
-	beq     t0,   t1, handle_ecall
-	li      t1,   EXC_BREAK
-	beq     t0,   t1, handle_ebreak
-	j       handle_unknown
 
-    /* Output the EXC code on on-board LEDs */
+sync_exceptions:
+    li      t1,   EXC_ILL_INSN
+    beq     t0,   t1, handle_illegal_insn
+    li      t1,   EXC_ECALL
+    beq     t0,   t1, handle_ecall
+    li      t1,   EXC_BREAK
+    beq     t0,   t1, handle_ebreak
+    j       handle_unknown
+
+/* Output the EXC code on on-board LEDs */
 
 handle_illegal_insn:
     la      a5,   __latd
     lw      a0,   0(a5)
     ori     a0,   a0, EXC_ILL_INSN
     sw      a0,   0(a5)
-	j       end_handler_incr_mepc
+    j       end_handler_incr_mepc
 
 handle_ecall:
     la      a5,   __latd
     lw      a0,   0(a5)
     ori     a0,   a0, EXC_ECALL
     sw      a0,   0(a5)
-	j       end_handler_incr_mepc
+    j       end_handler_incr_mepc
 
 handle_ebreak:
     la      a5,   __latd
     lw      a0,   0(a5)
     ori     a0,   a0, EXC_BREAK
     sw      a0,   0(a5)
-	j       end_handler_incr_mepc
+    j       end_handler_incr_mepc
 
 
 handle_unknown:
@@ -200,41 +200,41 @@ handle_unknown:
     lw      a0,   0(a5)
     ori     a0,   a0, EXC_UNKWN
     sw      a0,   0(a5)
-	j       end_handler_ret
+    j       end_handler_ret
 
 end_handler_incr_mepc:
-	csrr    t0,   mepc
+    csrr    t0,   mepc
     csrr    t2,   mtval   /* mtval contains the exception instruction */ 
     andi    t3,   t2, 1
-	/* Increment mepc by 2 or 4 depending on whether the instruction at mepc
-	   is compressed or not.  */
+    /* Increment mepc by 2 or 4 depending on whether the instruction at mepc
+       is compressed or not.  */
     beqz    t3,   end_handler_incr_mepc2
-	addi    t0,   t0, 2
+    addi    t0,   t0, 2
 end_handler_incr_mepc2:
-	addi    t0,   t0, 2
-	csrw    mepc, t0
+    addi    t0,   t0, 2
+    csrw    mepc, t0
 end_handler_ret:
-	lw      ra,   0(sp)
-	lw      a0,   4(sp)
-	lw      a1,   8(sp)
-	lw      a2,   12(sp)
-	lw      a3,   16(sp)
-	lw      a4,   20(sp)
-	lw      a5,   24(sp)
-	lw      a6,   28(sp)
-	lw      a7,   32(sp)
-	lw      t0,   36(sp)
-	lw      t1,   40(sp)
-	lw      t2,   44(sp)
-	lw      t3,   48(sp)
-	lw      t4,   52(sp)
-	lw      t5,   56(sp)
-	lw      t6,   60(sp)
-	addi    sp,   sp, 64
+    lw      ra,   0(sp)
+    lw      a0,   4(sp)
+    lw      a1,   8(sp)
+    lw      a2,   12(sp)
+    lw      a3,   16(sp)
+    lw      a4,   20(sp)
+    lw      a5,   24(sp)
+    lw      a6,   28(sp)
+    lw      a7,   32(sp)
+    lw      t0,   36(sp)
+    lw      t1,   40(sp)
+    lw      t2,   44(sp)
+    lw      t3,   48(sp)
+    lw      t4,   52(sp)
+    lw      t5,   56(sp)
+    lw      t6,   60(sp)
+    addi    sp,   sp, 64
 #ifdef HLT_ON_EXCEPTION
     j       _Exit
 #else
-	mret
+    mret
 #endif
 
 

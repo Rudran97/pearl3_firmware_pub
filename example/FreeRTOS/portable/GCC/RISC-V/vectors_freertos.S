@@ -1,10 +1,10 @@
-  .file	  "vectors_freertos.S"
+  .file   "vectors_freertos.S"
 
 #include "portContext.h"
 
   .section .vectors, "ax"
   .option  norvc
-  
+
   .extern  INT0_handler
   .extern  INT1_handler
   .extern  INT2_handler

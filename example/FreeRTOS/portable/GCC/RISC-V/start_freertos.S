@@ -1,16 +1,16 @@
     .file "start_freertos.S"
-    
+
     .section .startup, "ax"
 
-    .globl	main
+    .globl  main
     .globl  __global_pointer$
     .globl  _sp
     .globl  _enter
 
     .globl freertos_risc_v_trap_handler
-    
-    .type	_enter, @function
-    
+
+    .type   _enter, @function
+
 _enter:
     .option push
     .option norelax
@@ -23,10 +23,10 @@ _enter:
     sw      zero, 0(t0)
     addi    t0,   t0, 4
     bltu    t0,   t1, .L0
-    
+
     /* gp is set to io_orgin */
     la      gp,   __global_pointer$
-    
+
     .option pop
 
 #ifdef PRVX3IMC48SH
@@ -35,7 +35,7 @@ _enter:
      * interrupt source.
      */
     la      a5,    freertos_risc_v_trap_handler
-    csrw    mtvec, a5 
+    csrw    mtvec, a5
 #endif
 
     la      sp,   _sp
@@ -46,4 +46,4 @@ _enter:
 
 _Exit:
 .L2:
-	j	.L2
+    j   .L2
