@@ -11,7 +11,9 @@
 #ifndef _PRV_SPI_HOST_H_
 #define _PRV_SPI_HOST_H_
 
-#include "prv_gpio.h"
+#include <stdint.h>
+#include "prv32.h"
+#include "prv_hwreg.h"
 
 #define SPI0 ((SPI_REG_t *)_SPI0_)
 

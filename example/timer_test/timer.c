@@ -1,8 +1,10 @@
 #include "prv32.h"
-#include "prv_i2c.h"
+#include "prv_i2c_master.h"
 #include "lcd_I2C_lib.h"
 #include "prv_plic.h"
 #include "prv_timer0.h"
+#include "prv_interrupt.h"
+#include "prv_pin.h"
 
 void InitLCD();
 
@@ -48,7 +50,7 @@ void InitLCD()
     Set_Interrupt0(&i2c_int_config);
 
     uint32_t i2c_freq = I2C_FREQ(400000);
-    I2C0_Initialize(i2c_freq, 7, 6);
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
 
     LCD_Initialize(0x27);
     LCD_noBlink();

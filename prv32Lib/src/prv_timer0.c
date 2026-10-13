@@ -15,6 +15,7 @@
 #ifdef PRV_ASSERT_CHECKS
     #include "prv_csr.h"
     #include "prv_assert.h"
+    #include "prv_hwreg.h"
 #endif /* PRV_ASSERT_CHECKS */
 
 volatile uint32_t _sys_ticks;

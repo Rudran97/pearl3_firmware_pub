@@ -1,9 +1,9 @@
 # execute from project folder: gdb build/main.elf -x init.gdb
 
 # launch gdb-dashboard
-source ../../Utility/debugger/.gdbinit
+source ../../utility/debugger/.gdbinit
 # set mmio variables to access mmio registers. Use p/x *$name
-source ../../Utility/debugger/prvx32_mmio.gdb
+source ../../utility/debugger/prvx32_mmio.gdb
 
 directory ../../prv32Lib/src
 directory ../../prv32Lib/asm
@@ -25,7 +25,7 @@ define status
 end
 
 target remote :3333
-reset
-halt
-break main
-continue
+# reset
+# halt
+# break main
+# continue

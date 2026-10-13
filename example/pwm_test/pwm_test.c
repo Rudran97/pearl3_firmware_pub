@@ -1,4 +1,4 @@
-#include "prv_dct.h"
+#include "prv_pin.h"
 #include "prv_pwm.h"
 #include "prv_serial.h"
 #include "prv_interrupt.h"
@@ -13,14 +13,16 @@ int main()
         .name = PWM_MODULE3,
         .period_match = 228,
         .prescale = 29,
-        .pwmPin = 0};
+        .pwmPin = PORTB_PIN_B0_PWM3
+    };
 
     PWM_CONFIG_t led2_pwm = {
         .dutyCyc = 600,
         .name = PWM_MODULE4,
         .period_match = 1199,
         .prescale = 39,
-        .pwmPin = 1};
+        .pwmPin = PORTB_PIN_B1_PWM4
+    };
 
     PWM_Initialize(PWM3, &led1_pwm);
 

@@ -1,8 +1,10 @@
-#include "prv_i2c.h"
+#include "prv_i2c_master.h"
 #include "prv_serial.h"
 #include "prv_plic.h"
 #include "bh1750.h"
+#include "prv_interrupt.h"
 #include "prv_timer0.h"
+#include "prv_pin.h"
 
 const char message[] = "Hello World!";
 
@@ -13,7 +15,7 @@ int main()
     SysTick_Init(TIMERms_const);
 
     uint32_t i2c_freq = I2C_FREQ(400000);
-    I2C0_Initialize(i2c_freq, 7, 6);
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
 
     PLIC_INTERRUPT_CONFIG_t i2c_int_config = {
         .attach_interrupt_module = ATTACH_I2C0DNF_TO_INTERRUPT,

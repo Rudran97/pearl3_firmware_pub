@@ -14,6 +14,7 @@
 #ifdef PRV_ASSERT_CHECKS
     #include "prv_csr.h"
     #include "prv_assert.h"
+    #include "prv_hwreg.h"
 #endif /* PRV_ASSERT_CHECKS */
 
 typedef struct
@@ -40,7 +41,6 @@ void BH1750_begin(uint8_t address, BH1750_MODE_t mode)
     #endif /* PRV_ASSERT_CHECKS */
 
     BH1750_configure(mode);
-    
 }
 
 /**

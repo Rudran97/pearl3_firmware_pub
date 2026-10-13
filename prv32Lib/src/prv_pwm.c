@@ -9,6 +9,7 @@
  */
 
 #include "prv_dct.h"
+#include "prv_gpio.h"
 #include "prv_pwm.h"
 
 /**

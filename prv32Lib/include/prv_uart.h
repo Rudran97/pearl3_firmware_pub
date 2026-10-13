@@ -11,7 +11,9 @@
 #ifndef _PRV_UART_H_
 #define _PRV_UART_H_
 
-#include "prv_gpio.h"
+#include <stdbool.h>
+#include "prv32.h"
+#include "prv_hwreg.h"
 
 #define URT0 ((URT_REG_t *)_URT0_)
 #define URT1 ((URT_REG_t *)_URT1_)
@@ -56,7 +58,7 @@ typedef enum
 {
     UART_STATUS_NOERR = 0,
     UART_STATUS_BUFFER_FULL,
-	UART_STATUS_BUFFER_EMPTY,
+    UART_STATUS_BUFFER_EMPTY,
     UART_STATUS_PARITY_ERR,
 } UART_STATUS_t;
 

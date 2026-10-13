@@ -11,8 +11,8 @@
 #ifndef _PRV_ASSERT_H_
 #define _PRV_ASSERT_H_
 
-#include "prv32.h"
 #include "prv_interrupt.h"
+#include "prv_hwreg.h"
 
 /* Defines assert failures. */
 typedef enum

@@ -9,6 +9,7 @@
  */
 
 #include "prv_gpio.h"
+#include "prv_hwreg.h"
 
 /**
  * @brief API to Initialize a GPIO pin.
@@ -147,7 +148,7 @@ void GPIO_SetAlternateOutputPin(const GPIO_ALTOUT_t alternate_function, uint8_t 
     };
 
     ALTOUTEN |= (1 << alternate_function);
-    
+
     /* PWM, UART, SPI configures:
     *  - GPIO_Init
     *  - ALTOUTxCON
@@ -188,7 +189,7 @@ void GPIO_SetAlternateOutputPin(const GPIO_ALTOUT_t alternate_function, uint8_t 
 void GPIO_DisableAlternateOutputPin(const GPIO_ALTOUT_t alternate_function, uint8_t pin)
 {
     ALTOUTEN &= ~(1 << alternate_function);
-    
+
     switch (alternate_function)
     {
     case ALTERNATE_OUTPUT_PWM0:

@@ -11,7 +11,8 @@
 #ifndef _PRV_PWM_H_
 #define _PRV_PWM_H_
 
-#include "prv_gpio.h"
+#include <stdint.h>
+#include "prv_dct.h"
 
 #define PWM0 ((PWM_REG_t *)_PWM0_)
 #define PWM1 ((PWM_REG_t *)_PWM1_)

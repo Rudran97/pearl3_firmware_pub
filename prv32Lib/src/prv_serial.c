@@ -85,7 +85,7 @@ UART_BUFF_STATUS_t Serial_read(uint8_t *dest)
  */
 bool Serial_isAvailable()
 {
-	return UART_isAvailable(&serConfig);
+    return UART_isAvailable(&serConfig);
 }
 
 /**

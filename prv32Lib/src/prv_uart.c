@@ -9,6 +9,8 @@
  */
 
 #include "prv_uart.h"
+#include "prv_gpio.h"
+#include "prv_hwreg.h"
 
 /*************************************************************/
 /* Function prototypes */
@@ -36,12 +38,12 @@ static uint8_t UART_GetParity(uint8_t number)
  */
 void UART_Initialize(URT_REG_t *const module, UART_CONFIG_t *config)
 {
-	UART_bufferFlush(config);
-	module->URTBRG = config->baud_rate;
+    UART_bufferFlush(config);
+    module->URTBRG = config->baud_rate;
     module->URTCON = (config->enbit9 << _URTCON_ENBIT9_POSN)
                      | (_URTCON_RXPIN_MASK & (config->rxpin << _URTCON_RXPIN_POSN))
                      | (_URTCON_TXPIN_MASK & (config->txpin << _URTCON_TXPIN_POSN));
-    
+
     GPIO_SetAlternateOutputPin(ALTERNATE_OUTPUT_UART1, config->txpin);
 
     GPIO_CONFIG_t RxPin = {
@@ -60,7 +62,7 @@ void UART_Initialize(URT_REG_t *const module, UART_CONFIG_t *config)
  */
 UART_BUFF_STATUS_t UART_readByte(uint8_t *dest, UART_CONFIG_t *config)
 {
-	return pop_buffer(&config->buff_cfg, dest);
+    return pop_buffer(&config->buff_cfg, dest);
 }
 
 /**
@@ -82,9 +84,9 @@ bool UART_isAvailable(UART_CONFIG_t *config)
  */
 void UART_bufferFlush(UART_CONFIG_t *config)
 {
-	config->buff_cfg.buffHead = 0;
-	config->buff_cfg.buffTail = 0;
-	config->error = UART_STATUS_NOERR;
+    config->buff_cfg.buffHead = 0;
+    config->buff_cfg.buffTail = 0;
+    config->error = UART_STATUS_NOERR;
 }
 
 /********************************************************************************************************************************/
@@ -106,10 +108,10 @@ UART_BUFF_STATUS_t push_buffer(BUFF_CONFIG_t *buff_cfg, uint8_t data)
         return UART_BUFF_STATUS_BUFFER_FULL;
     }
 
-	buff_cfg->dataBuffer[buff_cfg->buffHead] = data;
-	buff_cfg->buffHead = buffNext;
+    buff_cfg->dataBuffer[buff_cfg->buffHead] = data;
+    buff_cfg->buffHead = buffNext;
 
-	return UART_BUFF_STATUS_NOERR;
+    return UART_BUFF_STATUS_NOERR;
 }
 
 /**
@@ -126,10 +128,10 @@ UART_BUFF_STATUS_t pop_buffer(BUFF_CONFIG_t *buff_cfg, uint8_t *data)
         return UART_BUFF_STATUS_BUFFER_EMPTY;
     }
 
-	*data = buff_cfg->dataBuffer[buff_cfg->buffTail];
+    *data = buff_cfg->dataBuffer[buff_cfg->buffTail];
     buff_cfg->buffTail = (buff_cfg->buffTail + 1) & buff_cfg->buffMask;
 
-	return UART_BUFF_STATUS_NOERR;
+    return UART_BUFF_STATUS_NOERR;
 }
 
 /********************************************************************************************************************************/
@@ -165,7 +167,7 @@ void UART_RXnonBlocking(URT_REG_t *const module, UART_CONFIG_t *config)
 
     uint8_t rx_data = rx_reg & _URTRX_RXDATA_MASK;
     uint8_t rec_parity = (rx_reg >> _URTRX_RXBIT9_POSN) & (_URTRX_RXBIT9_MASK >> _URTRX_RXBIT9_POSN);
-    
+
     // Push the received data in buffer
     if (push_buffer(&config->buff_cfg, rx_data) == UART_BUFF_STATUS_BUFFER_FULL)
     {

@@ -3305,4 +3305,4 @@ typedef union
 #define _PWMDC_PWMDTYCYC_POSN 0x0
 #define _PWMDC_PWMDTYCYC_MASK 0xfff
 
-#endif /* _PRV_HWREG_H_*/
+#endif /* _PRV_HWREG_H_ */

@@ -1,8 +1,9 @@
-#include "prv_i2c.h"
+#include "prv_i2c_master.h"
 #include "lcd_I2C_lib.h"
 #include "prv_serial.h"
 #include "prv_plic.h"
-#include "prv_uart.h"
+#include "prv_interrupt.h"
+#include "prv_pin.h"
 
 const char message[] = "Hello World!";
 
@@ -31,8 +32,8 @@ int main()
     ENABLE_GLOBAL_INTERRUPT();
 
     uint32_t i2c_freq = I2C_FREQ(400000);
-    I2C0_Initialize(i2c_freq, 7, 6);
-    
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
+
     LCD_Initialize(0x27);
     LCD_createChar(1, char_man);
 
@@ -42,15 +43,15 @@ int main()
     LCD_setCursor(0, 1);
     uint8_t num = LCD_print("%s", message);
 
-	uint8_t buff[18] = {0};
+    uint8_t buff[18] = {0};
 
     // printf("Number of characters printed %d", num);
     while (1)
-	{
-		while(Serial_isAvailable())
-		{
-			Serial_read(&buff[0]);
-			printf("%s", buff);
-		}
-	}
+    {
+        while(Serial_isAvailable())
+        {
+            Serial_read(&buff[0]);
+            printf("%s", buff);
+        }
+    }
 }

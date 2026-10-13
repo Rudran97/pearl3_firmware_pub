@@ -11,7 +11,7 @@
 #ifndef _PRV_INTERRUPT_H_
 #define _PRV_INTERRUPT_H_
 
-#include "prv32.h"
+#include "prv_device.h"
 
 #if PRV_FAMILY == PRV32
     /* Macro to Enable Global Interrupt */

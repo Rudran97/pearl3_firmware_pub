@@ -1,4 +1,5 @@
 #include "prv32.h"
+#include "prv_gpio.h"
 #include "prv_timer0.h"
 #include "prv_serial.h"
 #include "prv_interrupt.h"
@@ -12,13 +13,12 @@ int main()
 
     while (true)
     {
+        // __asm__("ebreak");
         LED_ToggleOutput(3);
-        // printf("0x0A");
+        printf("0x0A\n");
         delay(500);
 
         // LED_SetOutputLow(3);
-        // printf("0x50");
         // delay(1000);
     }
-    
 }

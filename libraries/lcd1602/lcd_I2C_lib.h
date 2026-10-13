@@ -13,6 +13,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // LCD Commands
 #define LCD_CMD_CLEARDISPLAY 0x01

@@ -15,42 +15,42 @@
 // ----------------------------------------------------------------
 // necessary includes
 
-#include "prv32.h"
+#include <stdlib.h>
 #include "prv_spi_host.h"
 #include "prv_timer0.h"
-#include <stdlib.h>
+#include "prv_pin.h"
 
 // ----------------------------------------------------------------
 // pin and ports (usually defined in the makefile)
 
 // chip-select output pin
 #ifndef PIN_TFT_CS
-#define PIN_TFT_CS 11
+#define PIN_TFT_CS PORTB_PIN_B11_SPI_nCS0
 #endif
 
 // TFT_DC output pin
 #ifndef PIN_TFT_DC
-#define PIN_TFT_DC 12
+#define PIN_TFT_DC PORTB_PIN_B12
 #endif
 
 // TFT_RST output pin
 #ifndef PIN_TFT_RST
-#define PIN_TFT_RST 13
+#define PIN_TFT_RST PORTB_PIN_B13
 #endif
 
 // SPI_SCLK pin
 #ifndef PIN_SPI_SCLK
-#define PIN_SPI_SCLK 10
+#define PIN_SPI_SCLK PORTB_PIN_B10_SPI_CLK
 #endif
 
 // SPI_SDO pin
 #ifndef PIN_SPI_SDO
-#define PIN_SPI_SDO 9
+#define PIN_SPI_SDO PORTB_PIN_B9_SPI_MO
 #endif
 
 // SPI_SDI pin
 #ifndef PIN_SPI_SDI
-#define PIN_SPI_SDI 8
+#define PIN_SPI_SDI PORTB_PIN_B8_SPI_MI
 #endif
 
 // ----------------------------------------------------------------

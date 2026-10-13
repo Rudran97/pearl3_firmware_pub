@@ -9,6 +9,8 @@
  */
 
 #include "prv_spi_host.h"
+#include "prv_gpio.h"
+#include "prv_hwreg.h"
 
 /*************************************************************/
 /* Function prototypes */
@@ -33,7 +35,7 @@ void SPI_Initialize(const SPI_CONFIG_t *const config)
                | (_SPI0CON1_SDOPIN_MASK & (config->sdoPin << _SPI0CON1_SDOPIN_POSN))
                | (_SPI0CON1_SDIPIN_MASK & (config->sdiPin << _SPI0CON1_SDIPIN_POSN))
                | (_SPI0CON1_SSPIN_MASK & (config->ssPin << _SPI0CON1_SSPIN_POSN));
-    
+
     GPIO_CONFIG_t SdiPin = {
         .gpio_mode = GPIO_MODE_INPUT_TRISTATE,
     };

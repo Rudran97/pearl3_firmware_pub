@@ -1,11 +1,11 @@
-#include "prv_i2c.h"
 #include "lcd_I2C_lib.h"
 #include "prv_plic.h"
 #include "prv_timer0.h"
 #include "hcsr04_sensor.h"
-#include "adc.h"
 #include "bh1750.h"
-// #include "prv_serial.h"
+#include "prv_pin.h"
+#include "prv_interrupt.h"
+#include "prv_i2c_master.h"
 
 void InitLCD();
 void deleteChar(uint8_t n);
@@ -13,25 +13,19 @@ void deleteChar(uint8_t n);
 int main()
 {
     SysTick_Init(TIMERms_const);
-    // Serial_Initialize(115200);
-
     ENABLE_GLOBAL_INTERRUPT();
 
     InitLCD();
     InitUltraSonicSensor();
     BH1750_begin(BH1750_I2CADDR, CONTINUOUS_HIGH_RES_MODE);
-    // InitADC();
 
-    uint8_t lx_char_printed = 0, adc_char_printed = 0, us_char_printed = 0;
+    uint8_t lx_char_printed = 0, us_char_printed = 0;
 
     LCD_setCursor(0, 0);
     uint8_t intensity_char = LCD_print("Lx : ");
 
     LCD_setCursor(0, 1);
     uint8_t dist_char = LCD_print("Distance : ");
-
-    // LCD_setCursor(1, 0);
-    // uint8_t adc_char = LCD_print("ADC value : ");
 
     while(1)
     {
@@ -42,17 +36,12 @@ int main()
         deleteChar(lx_char_printed);
         float intensity = BH1750_readLightLevel();
         lx_char_printed = LCD_print("%.2f", intensity);
-        
+
         /* Print Ultrasonic Sensor values */
         LCD_setCursor(dist_char + us_char_printed, 1);
         deleteChar(us_char_printed);
         float distance = getDistance();
         us_char_printed = LCD_print("%.2f", distance);
-
-        // LCD_setCursor(1, adc_char + adc_char_printed);
-        // deleteChar(adc_char_printed);
-        // uint8_t pot_val = readADC();
-        // adc_char_printed = LCD_print("%d", pot_val);
     }
 }
 
@@ -66,7 +55,7 @@ void InitLCD()
     Set_Interrupt0(&i2c_int_config);
 
     uint32_t i2c_freq = I2C_FREQ(400000);
-    I2C0_Initialize(i2c_freq, 7, 6);
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
 
     LCD_Initialize(0x27);
 }

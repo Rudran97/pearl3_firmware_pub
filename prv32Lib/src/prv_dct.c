@@ -9,6 +9,7 @@
  */
 
 #include "prv_dct.h"
+#include "prv_hwreg.h"
 
 /**
  * @brief API to Setup DCT Module.

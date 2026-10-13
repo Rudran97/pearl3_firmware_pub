@@ -35,7 +35,7 @@ Contains example applications demonstrating the use of:
 
 This directory also includes FreeRTOS demonstration projects and example applications for the Pearl3 platform.
 
-### Utility and Tools - `$REPO_TOP/Utility`
+### Utility and Tools - `$REPO_TOP/utility`
 
 Contains host-side utility programs, including:
 
@@ -50,9 +50,9 @@ All utilities require Python 3.x to run.
 
 ## Debugger Support
 
-To assist with software debugging on the Pearl3 platform, a custom [debug port](Utility/debugger/debugger.py) is provided. The debug port acts as a wrapper around the native debugging commands supported by the microcontroller and translates them into packets that can be interpreted by the on-chip debug module.
+To assist with software debugging on the Pearl3 platform, a custom [debug port](utility/debugger/debugger.py) is provided. The debug port acts as a wrapper around the native debugging commands supported by the microcontroller and translates them into packets that can be interpreted by the on-chip debug module.
 
-Communication with the debug module is performed through the [transport layer](Utility/debugger/transport.py), which uses the dedicated `DI` and `DO` programming/debug pins.
+Communication with the debug module is performed through the [transport layer](utility/debugger/transport.py), which uses the dedicated `DI` and `DO` programming/debug pins.
 
 There are two primary ways to debug software on the Pearl3 platform:
 
@@ -60,7 +60,7 @@ There are two primary ways to debug software on the Pearl3 platform:
 
 ### Debugging with Pearl TUI
 
-The Pearl Text User Interface (TUI) consists of a [debug shell](Utility/debugger/debug_shell.py) built on top of the debug port.
+The Pearl Text User Interface (TUI) consists of a [debug shell](utility/debugger/debug_shell.py) built on top of the debug port.
 
 The TUI organizes responses received from the microcontroller and presents them in dedicated panes for:
 
@@ -80,9 +80,9 @@ The TUI does not currently support source-level debugging, source code listing, 
 
 The Pearl3 platform also supports debugging through the GNU Debugger (GDB).
 
-This functionality is provided by a custom [GDB server](Utility/debugger/server.py), which bridges communication between GDB and the Pearl3 debug module. The server listens on port `3333` and can be accessed using any GDB client that supports the Remote Serial Protocol (RSP).
+This functionality is provided by a custom [GDB server](utility/debugger/server.py), which bridges communication between GDB and the Pearl3 debug module. The server listens on port `3333` and can be accessed using any GDB client that supports the Remote Serial Protocol (RSP).
 
-In addition to the `gdb server`, the [debug bridge](Utility/debugger/debugBridge.py) provides a higher-level interface built on top of the `debug port`. It combines existing debug commands with supporting utility tools to perform more complex operations, such as resetting and programming the microcontroller.
+In addition to the `gdb server`, the [debug bridge](utility/debugger/debugBridge.py) provides a higher-level interface built on top of the `debug port`. It combines existing debug commands with supporting utility tools to perform more complex operations, such as resetting and programming the microcontroller.
 
 The server currently supports the following packet types:
 

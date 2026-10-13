@@ -11,7 +11,9 @@
 #ifndef _PRV_DCT_H_
 #define _PRV_DCT_H_
 
+#include <stdint.h>
 #include "prv32.h"
+#include "prv_hwreg.h"
 
 #define DCT0 ((TIMER_DCT_t *)_TIMER0_)
 #define DCT1 ((TIMER_DCT_t *)_TIMER1_)

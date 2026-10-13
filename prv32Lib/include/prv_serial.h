@@ -14,10 +14,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "prv_uart.h"
-#include "../common/printf.h"
+#include "printf.h"
+#include "prv_pin.h"
 
-#define TX_PIN 2
-#define RX_PIN 3
+#define TX_PIN PORTB_PIN_B2_SERIAL_MON_TX
+#define RX_PIN PORTB_PIN_B3_SERIAL_MON_RX
 
 #define UART_BUFFER_SIZE 128
 

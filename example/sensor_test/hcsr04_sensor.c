@@ -1,4 +1,6 @@
 #include "hcsr04_sensor.h"
+#include "prv_gpio.h"
+#include "prv_ict.h"
 
 GPIO_CONFIG_t trig = {
     .gpio_mode = GPIO_MODE_OUTPUT,

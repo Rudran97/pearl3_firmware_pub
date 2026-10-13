@@ -1,14 +1,13 @@
-#ifndef _SONIC_SENSOR_H
-#define _SONIC_SENSOR_H
+#ifndef _HCSR04_SENSOR_H
+#define _HCSR04_SENSOR_H
 
-#include "prv_gpio.h"
-#include "prv_ict.h"
+#include "prv_pin.h"
 
-#define TRIG_PIN 0
-#define ECHO_PIN 1
+#define TRIG_PIN PORTB_PIN_B0
+#define ECHO_PIN PORTB_PIN_B1_ICT0_CAP1
 
 void InitUltraSonicSensor();
 float getDistance();
 
 
-#endif /* _SONIC_SENSOR_H */
+#endif /* _HCSR04_SENSOR_H */

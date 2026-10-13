@@ -12,7 +12,6 @@
 #define _PRV32_H_
 
 #include "prv_device.h"
-#include "prv_hwreg.h"
 
 #if PRV_FAMILY == PRV32
 #define SYSCLK 120000000

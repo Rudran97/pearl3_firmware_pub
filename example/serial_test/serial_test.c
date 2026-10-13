@@ -15,7 +15,7 @@ int main()
     while(true)
     {
         if (Serial_read(&ch) == UART_BUFF_STATUS_NOERR)
-            printf("%c", ch);
+            printf("%c\n", ch);
 
         LATD ^= 10;
         delay(100);

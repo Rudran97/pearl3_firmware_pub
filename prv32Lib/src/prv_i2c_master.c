@@ -9,6 +9,7 @@
  */
 
 #include "prv32.h"
+#include "prv_hwreg.h"
 #include "prv_gpio.h"
 #include "prv_i2c_master.h"
 

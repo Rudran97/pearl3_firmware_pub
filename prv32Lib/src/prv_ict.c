@@ -9,6 +9,7 @@
  */
 
 #include "prv_ict.h"
+#include "prv_hwreg.h"
 
 /**
  * @brief API to Setup ICT Module.

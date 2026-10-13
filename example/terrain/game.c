@@ -1,10 +1,12 @@
 #include <stdlib.h>
-#include "prv_i2c.h"
 #include "lcd_I2C_lib.h"
 #include "prv_gpio.h"
 #include "prv_plic.h"
 #include "prv_timer0.h"
 #include "prv_dct.h"
+#include "prv_i2c_master.h"
+#include "prv_interrupt.h"
+#include "prv_pin.h"
 
 #define PIN_BUTTON 2
 #define PIN_AUTOPLAY 1
@@ -288,7 +290,7 @@ int main() {
 
     srand(DCT_TIMER0B_READ_BUFFER_VALUE());
 
-    I2C0_Initialize(i2c_freq, 7, 6);
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
 
     initializeGraphics();
 
@@ -359,11 +361,7 @@ int main() {
             }
             ++distance;
 
-            GPIO_SetOutputLevel(GPIO_PORTA, PIN_AUTOPLAY,
-                                terrainLower[HERO_HORIZONTAL_POSITION + 2] ==
-                                        SPRITE_TERRAIN_EMPTY
-                                    ? HIGH
-                                    : LOW);
+            GPIO_SetOutputLevel(GPIO_PORTA, PIN_AUTOPLAY, terrainLower[HERO_HORIZONTAL_POSITION + 2] == SPRITE_TERRAIN_EMPTY ? HIGH : LOW);
         }
         delay(50);
     }

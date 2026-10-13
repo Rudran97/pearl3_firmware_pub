@@ -1,4 +1,7 @@
-#include "prv_i2c.h"
+#include "prv_gpio.h"
+#include "prv_i2c_master.h"
+#include "prv_interrupt.h"
+#include "prv_pin.h"
 #include "prv_plic.h"
 #include "prv_timer0.h"
 #include "hw.h"
@@ -9,18 +12,18 @@
 #include "prv_csr.h"
 
 SPI_CONFIG_t tft_spi_config = {
-	.mode = SPI_MODE0,
-	.baud_rate = SPI_FREQ(5000000),
-	.sclkPin = PIN_SPI_SCLK,
-	.sdoPin = PIN_SPI_SDO,
-	.sdiPin = PIN_SPI_SDI,
-	.ssPin = PIN_TFT_CS
+    .mode = SPI_MODE0,
+    .baud_rate = SPI_FREQ(5000000),
+    .sclkPin = PIN_SPI_SCLK,
+    .sdoPin = PIN_SPI_SDO,
+    .sdiPin = PIN_SPI_SDI,
+    .ssPin = PIN_TFT_CS
 };
 
 void light_sensor_init(void)
 {
     uint32_t i2c_freq = I2C_FREQ(400000);
-    I2C0_Initialize(i2c_freq, 7, 6);
+    I2C0_Initialize(i2c_freq, PORTA_PIN_A7_I2C0_SDA, PORTA_PIN_A6_I2C0_SCL);
 
     PLIC_INTERRUPT_CONFIG_t i2c_int_config = {
         .attach_interrupt_module = ATTACH_I2C0DNF_TO_INTERRUPT,
@@ -33,9 +36,9 @@ void light_sensor_init(void)
 
 static void init(void)
 {
-	DDRB &= ~ ((1 << PIN_TFT_RST) | (1 << PIN_TFT_DC));
+    DDRB &= ~ ((1 << PIN_TFT_RST) | (1 << PIN_TFT_DC));
 
-	SysTick_Init(TIMERms_const);
+    SysTick_Init(TIMERms_const);
     ENABLE_GLOBAL_INTERRUPT();
 
     light_sensor_init();
@@ -45,12 +48,12 @@ static void init(void)
 
 void TFT_drawText(uint8_t x, uint8_t y, uint16_t color, uint16_t bg, uint8_t size, const char *format, ...)
 {
-	va_list va;
-	va_start(va, format);
-	char buffer[40];
-	vsnprintf(buffer, 20, format, va);
-	va_end(va);
-	drawText(x, y, buffer, color, bg, size);
+    va_list va;
+    va_start(va, format);
+    char buffer[40];
+    vsnprintf(buffer, 20, format, va);
+    va_end(va);
+    drawText(x, y, buffer, color, bg, size);
 }
 
 int main()
@@ -62,10 +65,10 @@ int main()
     init();
     setTextWrap(true);
     fillScreen(ST7735_BLACK);
-	
+
     setFont(&FreeMonoBold9pt7b);
     setRotation(0);
-    
+
     fillScreen(ST7735_BLUE);
     fillRoundRect(4,  4,120,48,10,ST7735_WHITE);
     drawText(10, 36, "Stop Watch", ST7735_BLACK, ST7735_WHITE, 1);

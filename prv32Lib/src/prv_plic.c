@@ -9,6 +9,7 @@
  */
 
 #include "prv_plic.h"
+#include "prv_hwreg.h"
 
 /**
  * @brief API to attach peripheral to Interrupt0 and set priority.

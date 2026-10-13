@@ -12,6 +12,8 @@
 #define _PRV_GPIO_H_
 
 #include "prv32.h"
+#include "prv_hwreg.h"
+#include <stdint.h>
 
 #define GPIO_PORTA ((GPIO_PORT_t *)_GPIO_PORTA_)
 #define GPIO_PORTB ((GPIO_PORT_t *)_GPIO_PORTB_)

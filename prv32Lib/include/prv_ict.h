@@ -14,6 +14,7 @@
 #define _PRV_ICT_H_
 
 #include "prv32.h"
+#include <stdint.h>
 
 #define ICT0 ((TIMER_ICT_t *)_TIMER4_)
 #define ICT1 ((TIMER_ICT_t *)_TIMER5_)

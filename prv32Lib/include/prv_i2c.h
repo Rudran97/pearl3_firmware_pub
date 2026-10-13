@@ -10,7 +10,8 @@
 #ifndef _PRV_I2C_H_
 #define _PRV_I2C_H_
 
-#include "prv_i2c_master.h"
+#include <stddef.h>
+#include <stdint.h>
 
 /**
  * @brief API to send 1 byte - Blocking.

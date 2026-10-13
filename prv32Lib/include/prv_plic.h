@@ -11,7 +11,9 @@
 #ifndef _PRV_PLIC_H_
 #define _PRV_PLIC_H_
 
-#include "prv_interrupt.h"
+#include "prv32.h"
+#include "prv_io_map.h"
+#include <stdint.h>
 
 #define PLIC_PRIORITY ((PLIC_PRIORITY_t *)_PLIC_PRIORITY_)
 #define INTMAP ((PLIC_INTMAP_t *)_INTMAP_)
